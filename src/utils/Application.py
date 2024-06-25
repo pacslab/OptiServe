@@ -1,3 +1,6 @@
+import uuid
+import string
+import random
 import networkx as nx
 from typing import List
 
@@ -5,14 +8,18 @@ from .Function import Function
 
 
 class Application:
-    def __init__(self, name, version, functions: List[Function]=None):
+    def __init__(self,
+                 name=f'Application_{"".join(random.choies(string.ascii_letters, k=8))}',
+                 functions: List[Function]=None,
+                 edges: List[tuple]=[]):
+        self.id = uuid.uuid4().hex
         self.graph = nx.DiGraph()
         self.name = name
-        self.version = version
         
-        for function in functions or []:
-            self.graph.add_node(function)
+        self.graph.add_nodes_from(functions)
+        self.graph.add_edges_from(edges)
     
  
-    def add_function(self, function: Function):
-        self.add_node(function)
+    def add_function(self, function: Function, edges: List[tuple]=[]):
+        self.graph.add_node(function)
+        self.graph.add_edges_from(edges)
