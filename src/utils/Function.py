@@ -5,19 +5,21 @@ import string
 
 class Function:
     def __init__(self,
+                 code_dir,
                  runtime='python3.12',
-                 name=f'Function_{"".join(random.choies(string.ascii_letters, k=8))}',
+                 name=f'Function_{"".join(random.choices(string.ascii_letters, k=8))}',
                  inputs=None,
                  outputs=None,
-                 code_dirs=[] # List of different versions's code directories
+                 memory_size=128
                  ) -> None:
 
         self.id = uuid.uuid4().hex
+        self.code_dir = code_dir
         self.runtime = runtime
         self.name = name
         self.inputs = inputs
         self.outputs = outputs
-        self.code_dirs = code_dirs
+        self.memory_size = memory_size
         
         
     def __hash__(self) -> int:

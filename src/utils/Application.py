@@ -9,7 +9,7 @@ from .Function import Function
 
 class Application:
     def __init__(self,
-                 name=f'Application_{"".join(random.choies(string.ascii_letters, k=8))}',
+                 name=f'Application_{"".join(random.choices(string.ascii_letters, k=8))}',
                  functions: List[Function]=None,
                  edges: List[tuple]=[]):
         self.id = uuid.uuid4().hex
