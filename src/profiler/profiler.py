@@ -125,6 +125,9 @@ def get_function_profiling_logs(log_group_name=None):
     start_time = int((datetime.now() - timedelta(days=30)).timestamp())  # Last month
     end_time = int(datetime.now().timestamp())
     
+    
+    results: List[PerformanceMetrics] = []
+    
         
     response = logs_client.start_query(
         logGroupName=log_group_name,
@@ -144,5 +147,21 @@ def get_function_profiling_logs(log_group_name=None):
             queryId=query_id
         )
         
-    print(response)
+    for r in response['results']:
+        timestamp = r[0]['value']
+        log_list = [item.split(': ') for item in r[1]['value'].split('\t')]
+        
+        try:
+            results.append(PerformanceMetrics(
+                invocation_time=timestamp,
+                max_memory_usage=int(log_list[4][1].split(' ')[0]),
+                memory_usage=int(log_list[3][1].split(' ')[0]),
+                billable_duration=int(log_list[2][1].split(' ')[0]),
+                duration=float(log_list[1][1].split(' ')[0]),
+                init_duration=float(log_list[5][1].split(' ')[0]),
+            ))
+        except Exception as e:
+            pass
     
+    
+    return results
