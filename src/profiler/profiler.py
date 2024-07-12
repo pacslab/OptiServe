@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from typing import List
+from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
 from ..utils.Application import Application
@@ -31,28 +32,36 @@ from ..utils.zipper import (
 logger = Logger()
 
 lambda_client = boto3.client('lambda')
+logs_client = boto3.client('logs')
 sagemaker_client = boto3.client('sagemaker')
 step_functions_client = boto3.client('stepfunctions')
 
 
-def create_applications(step_functions_client=None, applications: List[Application]=[]):
-    if not step_functions_client:
-        raise ValueError("Please provide a valid step functions client")
+def create_applications(applications: List[Application]=[]):
+    pass
 
 
-def create_functions(lambda_client=None, application_dir: str = None):
-    if not lambda_client:
-        lambda_client = boto3.client('lambda')
-    
+def create_functions(application_dir: str = None): 
     functions: List[Function] = []
     
     for function_dir in os.listdir(application_dir):
         function = Function(code_dir=os.path.join(application_dir, function_dir), name=f'{application_dir.split('/')[-1]}_{function_dir}')
         functions.append(function)
+        
+        
+    for function in functions:
+        try:
+            response = logs_client.create_log_group(logGroupName=f'/aws/lambda/{function.name}')
+            logger.info(f"Log Group for function {function.name} created successfully.")
+        except Exception as e:
+            logger.error(f"Failed to create Log Group for function {function.name}: {e}")
+
 
     for function in functions:
         zip_dir(function.code_dir, f'{function.name}.zip')
         zip_file = get_zip_file_as_bytes(f'{function.name}.zip')
+        
+        log_group_name = f'/aws/lambda/{function.name}'
         
         try:
             response = lambda_client.create_function(
@@ -66,8 +75,16 @@ def create_functions(lambda_client=None, application_dir: str = None):
             Description='Function created by the Function as a Service (FaaS) platform',
             MemorySize=function.memory_size,
             Timeout=60,
-            Publish=True
+            Publish=True,
+            Environment={
+                    'Variables': {
+                        'LOG_GROUP_NAME': log_group_name
+                    }
+                }
             )
+            
+            logger.info(f"Function {function.name} created successfully.")
+            print(f"Function {function.name} created successfully.")
             
         except ClientError as e:
             if e.response['Error']['Code'] == 'ResourceConflictException':
@@ -84,23 +101,17 @@ def create_functions(lambda_client=None, application_dir: str = None):
             else:
                 logger.error(f"Unexpected error: {e}")
         
-        logger.info(f"Function {function.name} created successfully with ARN: {response['FunctionArn']}")
-        print(f"Function {function.name} created successfully.")
         delete_file(f'{function.name}.zip')
         time.sleep(1)
         
     return functions
 
 
-def profile_application(step_functions_client=None, application: Application=None, num_of_iterations=100):
-    if not step_functions_client:
-        raise ValueError("Please provide a valid step functions client")
+def profile_application(application: Application=None, num_of_iterations=100):
+    pass
 
 
-def profile_function(lambda_client=None, function: Function=None, num_of_iterations=100):
-    if not lambda_client:
-        lambda_client = boto3.client('lambda')
-        
+def profile_function(function: Function=None, num_of_iterations=100):        
     lambda_client.update_function_configuration(FunctionName=function.name, MemorySize=function.memory_size)
     time.sleep(1)
     
@@ -108,4 +119,30 @@ def profile_function(lambda_client=None, function: Function=None, num_of_iterati
         time.sleep(10)
         res = lambda_client.invoke(FunctionName=function.name, InvocationType='Event')
         print(res)
+        
+        
+def get_function_profiling_logs(log_group_name=None):
+    start_time = int((datetime.now() - timedelta(days=30)).timestamp())  # Last month
+    end_time = int(datetime.now().timestamp())
+    
+        
+    response = logs_client.start_query(
+        logGroupName=log_group_name,
+        queryString="fields @timestamp, @message| filter @message like 'REPORT'| sort @timestamp desc",
+        startTime=start_time,
+        endTime=end_time,
+        limit=10000
+    )
+    
+    query_id = response['queryId']
+    response = None
+    
+    while response == None or response['status'] == 'Running':
+        print('Waiting for query to complete ...')
+        time.sleep(1)
+        response = logs_client.get_query_results(
+            queryId=query_id
+        )
+        
+    print(response)
     
