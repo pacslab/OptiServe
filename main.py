@@ -5,4 +5,4 @@ from src.profiler.profiler import create_functions, profile_function, get_functi
 # profile_function(function=funcs[0], num_of_iterations=1)
 
 
-get_function_profiling_logs(log_group_name='/aws/lambda/A1_F1')
+print(get_function_profiling_logs(log_group_name='/aws/lambda/A1_F1'))
