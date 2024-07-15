@@ -111,17 +111,24 @@ def profile_application(application: Application=None, num_of_iterations=100):
     pass
 
 
-def profile_function(function: Function=None, num_of_iterations=100):        
-    lambda_client.update_function_configuration(FunctionName=function.name, MemorySize=function.memory_size)
-    time.sleep(1)
+def profile_function(function: Function=None, num_of_iterations=100, need_update=False):        
+    if need_update:
+        lambda_client.update_function_configuration(FunctionName=function.name, MemorySize=function.memory_size)
+        logger.info(f"Function {function.name} memory size updated to {function.memory_size} MB.")
+        time.sleep(1)
+        
     
     for _ in tqdm.tqdm(range(num_of_iterations)):
         time.sleep(10)
         res = lambda_client.invoke(FunctionName=function.name, InvocationType='Event')
-        print(res)
+        
+    logger.info(f"Function {function.name} invoked {num_of_iterations} times.")
         
         
 def get_function_profiling_logs(log_group_name=None):
+    if log_group_name is None:
+        raise ValueError("log_group_name cannot be None.")
+
     start_time = int((datetime.now() - timedelta(days=30)).timestamp())  # Last month
     end_time = int(datetime.now().timestamp())
     
@@ -146,22 +153,18 @@ def get_function_profiling_logs(log_group_name=None):
         response = logs_client.get_query_results(
             queryId=query_id
         )
-        
+
     for r in response['results']:
         timestamp = r[0]['value']
-        log_list = [item.split(': ') for item in r[1]['value'].split('\t')]
+        log_list = [item.split(': ') for item in r[1]['value'].split('\t')][:-1]
         
-        try:
-            results.append(PerformanceMetrics(
-                invocation_time=timestamp,
-                max_memory_usage=int(log_list[4][1].split(' ')[0]),
-                memory_usage=int(log_list[3][1].split(' ')[0]),
-                billable_duration=int(log_list[2][1].split(' ')[0]),
-                duration=float(log_list[1][1].split(' ')[0]),
-                init_duration=float(log_list[5][1].split(' ')[0]),
-            ))
-        except Exception as e:
-            pass
-    
-    
+        results.append(PerformanceMetrics(
+            invocation_time=timestamp,
+            max_memory_usage=int(log_list[4][1].split(' ')[0]),
+            memory_usage=int(log_list[3][1].split(' ')[0]),
+            billable_duration=int(log_list[2][1].split(' ')[0]),
+            duration=float(log_list[1][1].split(' ')[0]),
+            init_duration=float(log_list[5][1].split(' ')[0]) if len(log_list) == 6 else None,
+        ))
+
     return results
