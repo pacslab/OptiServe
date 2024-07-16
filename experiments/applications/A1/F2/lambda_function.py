@@ -9,5 +9,5 @@ def lambda_handler(event, context):
     
     return {
         'statusCode': 200,
-        'body': "'f2'"
+        'body': {"name":"f2","input":event}
     }
