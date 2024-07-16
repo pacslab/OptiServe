@@ -45,6 +45,8 @@ def create_functions(application_dir: str = None):
     functions: List[Function] = []
     
     for function_dir in os.listdir(application_dir):
+        if (not os.path.isdir(os.path.join(application_dir, function_dir))) or function_dir == '__pycache__':
+            continue
         function = Function(code_dir=os.path.join(application_dir, function_dir), name=f'{application_dir.split('/')[-1]}_{function_dir}')
         functions.append(function)
         
@@ -68,7 +70,7 @@ def create_functions(application_dir: str = None):
             FunctionName=function.name,
             Runtime=function.runtime,
             Role=f'arn:aws:iam::{IAM}:role/{LAMBDA_ROLE}',
-            Handler='function.lambda_handler',
+            Handler='lambda_function.lambda_handler',
             Code={
                 'ZipFile': zip_file
             },
@@ -129,8 +131,8 @@ def get_function_profiling_logs(log_group_name=None):
     if log_group_name is None:
         raise ValueError("log_group_name cannot be None.")
 
-    start_time = int((datetime.now() - timedelta(days=30)).timestamp())  # Last month
-    end_time = int(datetime.now().timestamp())
+    start_time = int((datetime.utcnow() - timedelta(days=30)).timestamp())  # Last month
+    end_time = int(datetime.utcnow().timestamp())
     
     
     results: List[PerformanceMetrics] = []
