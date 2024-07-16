@@ -1,4 +1,3 @@
-import json
 import os
 
 def lambda_handler(event, context):
@@ -16,5 +15,5 @@ def lambda_handler(event, context):
     
     return {
         'statusCode': 200,
-        'body': json.dumps({'name':'f1', '1MB':file_indicator})
+        'body': {"name":"f1","input":event}
     }
