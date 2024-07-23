@@ -166,7 +166,7 @@ def get_function_profiling_logs(log_group_name=None):
             memory_usage=int(log_list[3][1].split(' ')[0]),
             billable_duration=int(log_list[2][1].split(' ')[0]),
             duration=float(log_list[1][1].split(' ')[0]),
-            init_duration=float(log_list[5][1].split(' ')[0]) if len(log_list) == 6 else None,
+            init_duration=float(log_list[5][1].split(' ')[0]) if len(log_list) == 6 else 0,
         ))
 
     return results
