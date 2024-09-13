@@ -4,11 +4,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 from .invoker import Invoker
-from .log_parser import LogParser
 from .cost_calculator import CostCalculator
 from .config_manager import ConfigManager
 from src.utils.logger import logger
 from src.exceptions import InvocationError
+from src.analytics.log_parser import LogParser
 
 
 class Profiler:
@@ -51,7 +51,7 @@ class Profiler:
             
         try:
             exec_log = self.invoker.invoke_to_get_duration(payload=self.payload)
-            exec_time = self.log_parser.parse(log=exec_log)
+            exec_time = self.log_parser.parse_execution_time(log=exec_log)
             
         except InvocationError as e:
             logger.error(e)

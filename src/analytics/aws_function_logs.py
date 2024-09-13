@@ -1,0 +1,76 @@
+import boto3
+import time
+import datetime
+
+
+import numpy as np
+import pandas as pd
+
+
+from .aws_logs import AWSLogs
+
+from src.exceptions import (
+    FunctionTimeout,
+    MaxInvocationAttemptsReached,
+)
+from src.utils.logger import logger
+
+
+class AWSFunctionLogs(AWSLogs):
+    def __init__(self,
+                 boto_session: boto3.Session = None,
+                 function_name: str = None,
+                 total_logs_limit: int = 10000):
+        super().__init__(boto_session=boto_session)
+        if function_name is None:
+            raise ValueError('function_name must be provided')
+        
+        self._function_name = function_name
+        self._log_group_name = f'/aws/lambda/{self._function_name}'
+        self._total_logs_limit = total_logs_limit
+        self._max_invocation_attempts = 5
+        self._sleep_interval = 1
+        
+        
+    def _get_logs(self, last_n_seconds: int = 60):
+        start_time = int((datetime.datetime.utcnow() - datetime.timedelta(days=30)).timestamp())  # Last month
+        end_time = int(datetime.datetime.utcnow().timestamp())
+        
+        response = self._aws_logs_client.start_query(
+            logGroupName=self._log_group_name,
+            queryString="fields @timestamp, @message| filter @message like 'REPORT'| sort @timestamp desc",
+            startTime=start_time,
+            endTime=end_time,
+            limit=self._total_logs_limit
+        )
+        
+        query_id = response['queryId']
+        response = None
+        
+        
+        try:
+            attempts = 0
+            while attempts < self._max_invocation_attempts:
+                response = self._aws_logs_client.get_query_results(
+                    queryId=query_id
+                )
+                
+                if response['status'] == 'Complete':
+                    break
+                
+                time.sleep(self._sleep_interval)
+                attempts += 1
+                
+            if response['status'] != 'Complete':
+                raise MaxInvocationAttemptsReached()
+            
+
+            for r in response['results']:
+                yield r[0]['value'], self.log_parser.parse_profiling_logs(r[1]['value'])
+        
+        except:
+            raise FunctionTimeout()
+        
+        
+    def get_logs_df(self, last_n_seconds: int = 60):
+        pass
