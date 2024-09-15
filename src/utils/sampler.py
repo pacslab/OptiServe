@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 
-from src.profiler.profiler import Profiler
+from src.profiler.explorer import Explorer
 from src.utils.logger import logger
 from src.exceptions import (
     SamplingError,
@@ -17,12 +17,12 @@ from .exploration import Exploration
 class Sampler:
     def __init__(
         self,
-        profiler: Profiler,
+        explorer: Explorer,
         profiling_iterations: int,
     ):
         self.exploration = None
-        self.profiler = profiler
-        self.memory_space = profiler.memory_space
+        self.explorer = explorer
+        self.memory_space = explorer.memory_space
         self._profiling_iterations = profiling_iterations
     
     
@@ -48,7 +48,7 @@ class Sampler:
                 self.update_exploration(memory_mb=int(self.memory_space[0]))
                 
             except NotEnoughMemory as e:
-                logger.info(f'Trying with new memories. {self.profiler.invoker._function_name}: {self.memory_space[0]}MB')
+                logger.info(f'Trying with new memories. {self.explorer.invoker._function_name}: {self.memory_space[0]}MB')
                 self.memory_space = np.array(
                     [
                         mem
@@ -70,9 +70,9 @@ class Sampler:
     
     
     def update_exploration(self, memory_mb: int):
-        logger.info(f"Exploring memory configuration: {memory_mb} MB for {self.profiler.invoker._function_name}")
+        logger.info(f"Exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}")
         try:
-            durations = self.profiler.explore_multi_threading(
+            durations = self.explorer.explore_multi_threading(
                 num_of_invocations=self._profiling_iterations,
                 num_of_threads=self._profiling_iterations,
                 memory_mb=memory_mb
@@ -89,7 +89,7 @@ class Sampler:
         
         self.exploration.add_sample(subsample)
         
-        logger.info(f"Finished exploring memory configuration: {memory_mb} MB for {self.profiler.invoker._function_name}: {durations} ms")
+        logger.info(f"Finished exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}: {durations} ms")
         
         
     def _explore_dynamically(self, durations: list):
@@ -105,7 +105,7 @@ class Sampler:
             min_cv > 0.05
         ):
             try:
-                result = self.profiler._explore()
+                result = self.explorer._explore()
                 
             except SamplingError as e:
                 logger.error(e)

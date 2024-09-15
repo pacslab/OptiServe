@@ -1,5 +1,7 @@
 import boto3
+import time
 import numpy as np
+from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -11,7 +13,7 @@ from src.exceptions import InvocationError
 from src.analytics.log_parser import LogParser
 
 
-class Profiler:
+class Explorer:
     def __init__(
         self,
         function_name: str,
@@ -19,6 +21,7 @@ class Profiler:
         boto_session: boto3.Session,
         payload: str = None,
         memory_bounds: tuple = (128, 3009),
+        memory_space_step: int = 1,
     ):
         self.log_parser = LogParser()
         self.config_manager = ConfigManager(
@@ -35,7 +38,7 @@ class Profiler:
         )
         self.payload = payload
         self.memory_bounds = memory_bounds
-        self.memory_space = np.array(list(set(range(*memory_bounds))), dtype=int)
+        self.memory_space = np.array(list(set(range(*memory_bounds, memory_space_step))), dtype=int)
         
         self.cost = 0
         self._memory_config_mb = 0
@@ -114,3 +117,8 @@ class Profiler:
         )
         
         return results
+    
+    
+    def explore_all_memories(self, num_of_invocations: int):     
+        for memory_mb in tqdm(self.memory_space, desc="Processing", bar_format="{l_bar}{bar} [Elapsed: {elapsed} | Remaining: {remaining}]"):
+            _ = self.explore_multi_threading(num_of_invocations, num_of_invocations, memory_mb)

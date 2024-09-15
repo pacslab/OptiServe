@@ -7,6 +7,7 @@ from .max_invocation_attempts_reached import MaxInvocationAttemptsReached
 from .no_memory_left import NoMemoryLeft
 from .not_enough_memory import NotEnoughMemory
 from .sampling_error import SamplingError
+from .unfeasible_constraint import UnfeasibleConstraint
 
 __all__ = [
     "CostCalculationError",
@@ -18,4 +19,5 @@ __all__ = [
     "NoMemoryLeft",
     "NotEnoughMemory",
     "SamplingError",
+    "UnfeasibleConstraint",
 ]
