@@ -14,7 +14,7 @@ class Optimizer:
         self,
         objective: Objective,
         sampler: Sampler,
-        max_total_sample_count: int = 20,
+        max_total_sample_count: int = 30,
     ):
         self.objective = objective
         self.sampler = sampler
@@ -55,7 +55,7 @@ class Optimizer:
         try:
             self.sampler.update_exploration(memory_mb)
         except NotEnoughMemory as e:
-            logger.error(f'Trying with new memories. {self.sampler.profiler.invoker._function_name}: {memory_mb}MB')
+            logger.error(f'Trying with new memories. {self.sampler.explorer.invoker._function_name}: {memory_mb}MB')
             self.memory_space = np.array(
                 [
                     mem for mem in self.sampler.memory_space if

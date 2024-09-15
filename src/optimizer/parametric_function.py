@@ -5,6 +5,9 @@ from scipy.optimize import curve_fit
 
 from src.utils.exploration import Exploration
 from src.utils.logger import logger
+from src.exceptions import (
+    UnfeasibleConstraint,
+)
 
 
 @dataclass
@@ -34,8 +37,27 @@ class ParamFunction:
         )[0]
         
         
-    def minimize(self, memory_space: np.ndarray):
-        costs = self(memory_space) * memory_space
+    def minimize(self,
+                 memory_space: np.ndarray,
+                 latency_constraint_threshold_ms: float = None):
+
+        exec_time = self(memory_space)
+        costs = exec_time * memory_space
+        
+        if latency_constraint_threshold_ms:
+            try:
+                feasible_memories = exec_time < latency_constraint_threshold_ms
+                
+                if len(feasible_memories) == 0:
+                    raise UnfeasibleConstraint(f"No feasible memory configuration found for latncy requirement {latency_constraint_threshold_ms} ms.")
+
+            except UnfeasibleConstraint as e:
+                logger.warning(e)
+                
+            else:
+                memory_space = memory_space[feasible_memories]
+                costs = costs[feasible_memories]
+            
         return memory_space[np.argmin(costs)]
     
     
