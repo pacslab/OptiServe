@@ -74,5 +74,5 @@ class FunctionPerformanceModeling:
         if not self._explored:
             self.run()
 
-        return self.param_function.function
+        return lambda x: self.param_function.function(x, *self.param_function.params)
      
