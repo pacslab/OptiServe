@@ -32,7 +32,7 @@ class AWSFunctionLogs(AWSLogs):
         self._sleep_interval = 1
         
         
-    def _get_logs(self, last_n_seconds: int = 60):
+    def get_logs(self, last_n_seconds: int = 60):
         start_time = int((datetime.datetime.utcnow() - datetime.timedelta(days=30)).timestamp())  # Last month
         end_time = int(datetime.datetime.utcnow().timestamp())
         
@@ -64,13 +64,23 @@ class AWSFunctionLogs(AWSLogs):
             if response['status'] != 'Complete':
                 raise MaxInvocationAttemptsReached()
             
-
+            results = []
             for r in response['results']:
-                yield r[0]['value'], self.log_parser.parse_profiling_logs(r[1]['value'])
-        
-        except:
-            raise FunctionTimeout()
+                parsed_log = self.log_parser.parse_profiling_logs(r[1]['value'])
+                parsed_log['Timestamp'] = r[0]['value']
+                
+                results.append(parsed_log)
+                
+            return results
+
+
+        except MaxInvocationAttemptsReached:
+            raise FunctionTimeout("Could not get the logs in time.")
         
         
     def get_logs_df(self, last_n_seconds: int = 60):
-        pass
+        logs = self.get_logs(last_n_seconds=last_n_seconds)
+        
+        logs = pd.DataFrame(logs)
+        
+        return logs
