@@ -16,7 +16,8 @@ class CostCalculator:
  
     def calculate_cost(self,
                        memory_mb: int,
-                       duration_ms: float or np.ndarray):
+                       duration_ms: float or np.ndarray,
+                       total_requests: float = 1.0):
         if not self.aws_pricing_units:
             self.aws_pricing_units = self._get_amazon_pricing_units()
             
@@ -25,7 +26,7 @@ class CostCalculator:
         
         compute_cost = self.aws_pricing_units["compute"] * memory_gb * duration_s
         
-        return compute_cost + self.aws_pricing_units["request"]
+        return compute_cost + self.aws_pricing_units["request"] * total_requests
     
     
     def _get_amazon_pricing_units(self,
