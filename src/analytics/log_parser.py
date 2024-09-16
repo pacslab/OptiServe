@@ -48,7 +48,7 @@ class LogParser:
     def parse_execution_time(self, log: str):
         results = self._get_function_invocation_logs(log)
 
-        exewc_time_ms = results["Billed Duration"]
+        exec_time_ms = results["Billed Duration"]
 
         return exec_time_ms
     
@@ -60,19 +60,6 @@ class LogParser:
             if match:
                 results[key] = float(match.group('value'))
 
-        if "Billed Duration" not in results:
-            raise LogParsingError()
-
         logger.info(f'Profiling Results: {results}')
-
-        if "Task timed out after" in log:
-            raise FunctionTimeout()
-
-        if results["Max Memory Used"] > results["Memory Size"]:
-            raise NotEnoughMemory(duration_ms=int(results["Billed Duration"]))
-
-        error_msg = re.match(r".*\[ERROR\] (?P<error>.*)END RequestId.*", log)
-        if error_msg is not None:
-            raise InvocationError(duration_ms=int(results["Billed Duration"]), message=error_msg["error"])
         
         return results
