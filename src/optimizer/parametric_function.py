@@ -48,7 +48,7 @@ class ParamFunction:
             try:
                 feasible_memories = exec_time < latency_constraint_threshold_ms
                 
-                if len(feasible_memories) == 0:
+                if not np.any(feasible_memories):
                     raise UnfeasibleConstraint(f"No feasible memory configuration found for latncy requirement {latency_constraint_threshold_ms} ms.")
 
             except UnfeasibleConstraint as e:
