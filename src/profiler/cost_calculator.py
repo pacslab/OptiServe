@@ -9,15 +9,15 @@ from src.exceptions import CostCalculationError
 
 
 class CostCalculator:
-    def __init__(self, function_name: str):
+    def __init__(self, function_name: str = None):
         self.aws_pricing_units = None
-        self.function_name = function_name
+        self._function_name = function_name
 
  
     def calculate_cost(self,
                        memory_mb: int,
                        duration_ms: float or np.ndarray,
-                       total_requests: float = 1.0):
+                       calculate_invocation_cost: bool = True):
         if not self.aws_pricing_units:
             self.aws_pricing_units = self._get_amazon_pricing_units()
             
@@ -26,7 +26,7 @@ class CostCalculator:
         
         compute_cost = self.aws_pricing_units["compute"] * memory_gb * duration_s
         
-        return compute_cost + self.aws_pricing_units["request"] * total_requests
+        return compute_cost + (self.aws_pricing_units["request"] if calculate_invocation_cost else 0)
     
     
     def _get_amazon_pricing_units(self,
