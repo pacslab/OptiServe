@@ -32,9 +32,9 @@ class AWSFunctionLogs(AWSLogs):
         self._sleep_interval = 1
         
         
-    def get_logs(self, last_n_seconds: int = 60):
-        start_time = int((datetime.datetime.utcnow() - datetime.timedelta(days=30)).timestamp())  # Last month
-        end_time = int(datetime.datetime.utcnow().timestamp())
+    def get_logs(self, start_time: int, end_time: int):
+        if start_time is None or end_time is None:
+            raise ValueError('start_time and end_time must be provided')
         
         response = self._aws_logs_client.start_query(
             logGroupName=self._log_group_name,
@@ -66,7 +66,7 @@ class AWSFunctionLogs(AWSLogs):
             
             results = []
             for r in response['results']:
-                parsed_log = self.log_parser.parse_profiling_logs(r[1]['value'])
+                parsed_log = self.log_parser.parse_function_profiling_logs(r[1]['value'])
                 parsed_log['Timestamp'] = r[0]['value']
                 
                 results.append(parsed_log)

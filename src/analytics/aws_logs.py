@@ -8,7 +8,8 @@ from .log_parser import LogParser
 class AWSLogs(ABC):
     def __init__(self,
                  boto_session: boto3.Session = None):
-        self._aws_logs_client = boto_session.client('logs')
+         
+        self._aws_logs_client = boto_session.client('logs')   
         self.log_parser = LogParser()
         
     @abstractmethod

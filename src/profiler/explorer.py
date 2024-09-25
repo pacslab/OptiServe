@@ -54,7 +54,7 @@ class Explorer:
             
         try:
             exec_log = self.invoker.invoke_to_get_duration(payload=self.payload)
-            exec_time = self.log_parser.parse_execution_time(log=exec_log)
+            exec_time = self.log_parser.parse_function_execution_time(log=exec_log)
             
         except InvocationError as e:
             logger.error(e)
