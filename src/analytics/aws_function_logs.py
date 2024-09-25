@@ -78,8 +78,11 @@ class AWSFunctionLogs(AWSLogs):
             raise FunctionTimeout("Could not get the logs in time.")
         
         
-    def get_logs_df(self, last_n_seconds: int = 60):
-        logs = self.get_logs(last_n_seconds=last_n_seconds)
+    def get_logs_df(self, start_time: int, end_time: int):
+        if start_time is None or end_time is None:
+            raise ValueError('start_time and end_time must be provided')
+
+        logs = self.get_logs(start_time=start_time, end_time=end_time)
         
         logs = pd.DataFrame(logs)
         
