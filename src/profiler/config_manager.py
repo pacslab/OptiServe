@@ -35,7 +35,25 @@ class ConfigManager:
         return int(quota["Quota"]["Value"])
     
     
-    def set_config(self, memory_mb: int, timeout_s: int = None):
+    def get_config(self):
+        try:
+            config = self._aws_lambda_client.get_function_configuration(FunctionName=self._function_name)
+        
+        except ParamValidationError as e:
+            logger.debug(e.args[0])
+            raise FunctionConfig(e.args[0])
+        
+        except ClientError as e:
+            raise FunctionConfigurationError(e.args[0])
+        
+        else:
+            return FunctionConfig(
+                memory_mb=config['MemorySize'],
+                timeout_s=config['Timeout']
+            )
+
+    
+    def set_config(self, memory_mb: int, timeout_s: int = 10):
         try:
             config = self._aws_lambda_client.get_function_configuration(FunctionName=self._function_name)
             
@@ -48,6 +66,7 @@ class ConfigManager:
                     MemorySize=int(memory_mb),
                     Timeout=timeout_s,
                 )
+
             else:
                 self._aws_lambda_client.update_function_configuration(
                     FunctionName=self._function_name,
