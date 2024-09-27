@@ -33,7 +33,7 @@ class LogParser:
         logger.info(f'Invocation Results: {results}')
 
         if "Task timed out after" in log:
-            raise FunctionTimeout()
+            raise FunctionTimeout(duration_ms=int(results["Billed Duration"]))
 
         if results["Max Memory Used"] > results["Memory Size"]:
             raise NotEnoughMemory(duration_ms=int(results["Billed Duration"]))
@@ -46,9 +46,13 @@ class LogParser:
         
         
     def parse_function_execution_time(self, log: str):
-        results = self._get_function_invocation_logs(log)
+        try:
+            results = self._get_function_invocation_logs(log)
 
-        exec_time_ms = results["Billed Duration"]
+            exec_time_ms = results["Billed Duration"]
+        
+        except InvocationError as e:
+            exec_time_ms = e.duration_ms
 
         return exec_time_ms
     

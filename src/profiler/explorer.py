@@ -94,7 +94,7 @@ class Explorer:
             for future in as_completed(futures):
                 try:
                     results.append(future.result())
-                except InvocationError as e:
+                except Exception as e:
                     logger.error(e)
                     
                     if error is None:
