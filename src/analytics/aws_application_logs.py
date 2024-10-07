@@ -62,7 +62,7 @@ class AWSApplicationLogs(AWSLogs):
             if response['status'] != 'Complete':
                 raise MaxInvocationAttemptsReached()
             
-            results = defaultdict(lambda: defaultdict(lambda: {'s': 0, 'e': 0, 'd': 0}))
+            results = defaultdict(lambda: {'s': 0, 'e': 0, 'd': 0})
             for r in response['results']:
                 r_json = json.loads(r[1]['value'])
                 if r_json['type'] in ['ExecutionSucceeded', 'ExecutionStarted']:
@@ -71,7 +71,7 @@ class AWSApplicationLogs(AWSLogs):
                     event_type = r_json['type']
                     
                     results[execution_arn]['s' if event_type == 'ExecutionStarted' else 'e'] = event_timestamp
-            
+
             for key, value in results.items():
                 results[key]['d'] = results[key]['e'] - results[key]['s']
 
