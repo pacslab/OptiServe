@@ -30,8 +30,7 @@ class Optimizer:
         print('Duration: ', self.sampler.exploration.durations)
         termination_value = self.objective.termination_value
         print('Value and Threshold: ', termination_value, self.objective.termination_threshold)
-        return (len(self.sampler.exploration) > self._max_total_sample_count or
-                self.objective.termination_value > self.objective.termination_threshold)
+        return (sample_count > self._max_total_sample_count or termination_value > self.objective.termination_threshold)
         
     
     def _initialize(self):

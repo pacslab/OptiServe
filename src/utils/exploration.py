@@ -6,7 +6,9 @@ from .sample import Sample
 class Exploration:
     """Class for storing and analyzing samples of memory and duration for a single function."""
     
-    def __init__(self, samples: list = []):
+    def __init__(self, samples: list = None):
+        if samples is None:
+            samples = []
         self._samples = samples
         
     
