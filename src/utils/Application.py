@@ -4,7 +4,7 @@ import random
 import networkx as nx
 from typing import List
 
-from .Function import Function
+from .function import Function
 
 
 class Application:

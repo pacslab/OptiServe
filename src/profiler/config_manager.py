@@ -53,7 +53,7 @@ class ConfigManager:
             )
 
     
-    def set_config(self, memory_mb: int, timeout_s: int = 10):
+    def set_config(self, memory_mb: int, timeout_s: int = None):
         try:
             config = self._aws_lambda_client.get_function_configuration(FunctionName=self._function_name)
             

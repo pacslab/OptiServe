@@ -86,7 +86,7 @@ class Sampler:
         durations = self._explore_dynamically(durations=durations)
         
         subsample = [Sample(memory_mb=memory_mb, duration_ms=duration) for duration in durations]
-        
+
         self.exploration.add_sample(subsample)
         
         logger.info(f"Finished exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}: {durations} ms")
