@@ -4,7 +4,8 @@ import datetime
 import json
 
 from src.exceptions import (
-    MaxInvocationAttemptsReached
+    MaxInvocationAttemptsReached,
+    FunctionTimeout
 )
 
 from collections import defaultdict
