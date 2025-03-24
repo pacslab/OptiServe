@@ -1,10 +1,11 @@
 import boto3
+import time
 from botocore.exceptions import (
     ClientError,
     ParamValidationError,
 )
 
-from .config import FunctionConfig
+from src.profiler.config import FunctionConfig
 
 from src.utils.logger import logger
 from src.exceptions import (

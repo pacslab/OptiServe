@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import boto3
 
-from .log_parser import LogParser
+from src.analytics.log_parser import LogParser
 
 
 class AWSLogs(ABC):
