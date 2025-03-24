@@ -10,7 +10,7 @@ from src.exceptions import (
 
 from collections import defaultdict
 
-from .aws_logs import AWSLogs
+from src.analytics.aws_logs import AWSLogs
 
 
 class AWSApplicationLogs(AWSLogs):

@@ -5,9 +5,9 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-from .invoker import Invoker
-from .cost_calculator import CostCalculator
-from .config_manager import ConfigManager
+from src.profiler.invoker import Invoker
+from src.profiler.cost_calculator import CostCalculator
+from src.profiler.config_manager import ConfigManager
 from src.utils.logger import logger
 from src.exceptions import InvocationError
 from src.analytics.log_parser import LogParser

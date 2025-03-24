@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 
-from .aws_logs import AWSLogs
+from src.analytics.aws_logs import AWSLogs
 
 from src.exceptions import (
     FunctionTimeout,

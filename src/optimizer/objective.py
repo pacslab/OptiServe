@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.stats as stats
 
-from .parametric_function import ParamFunction
+from src.optimizer.parametric_function import ParamFunction
 
 
 class Objective:

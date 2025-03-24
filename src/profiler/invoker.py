@@ -61,7 +61,7 @@ class Invoker:
                     
             except ReadTimeoutError:
                 logger.warning(f"Lambda exploration timed out. {self._function_name}: {memory_mb}MB")
-                raise FunctionTimeout(duration_ms=timeout)
+                raise FunctionTimeout(duration_ms=timeout_s)
 
 
             except ParamValidationError as e:
