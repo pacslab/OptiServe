@@ -84,10 +84,12 @@ class LogParser:
 
     def parse_function_profiling_logs(self, log: str):
         results = {}
-        for key in self._function_log_parsing_params:
-            match = re.search(rf"{key}: (?P<value>[0-9.]+) (ms|MB)", log)
-            if match:
-                results[key] = float(match.group("value"))
+        for param, patterns in self._patterns_map.items():
+            for pattern in patterns:
+                match = re.search(pattern, log)
+                if match:
+                    results[param] = float(match.group("value"))
+                    break
 
         logger.info(f"Profiling Results: {results}")
 
