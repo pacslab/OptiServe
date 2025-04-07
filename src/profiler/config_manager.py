@@ -5,7 +5,7 @@ from botocore.exceptions import (
     ParamValidationError,
 )
 
-from src.profiler.config import FunctionConfig
+from profiler.function_config import FunctionConfig
 
 from src.utils.logger import logger
 from src.exceptions import (
