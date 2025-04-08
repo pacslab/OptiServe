@@ -11,6 +11,7 @@ from src.exceptions import (
 )
 from src.utils.sample import Sample
 from src.utils.exploration import Exploration
+from typing import Optional, List, Dict
 
 
 class Sampler:
@@ -19,57 +20,55 @@ class Sampler:
         explorer: Explorer,
         profiling_iterations: int,
     ):
-        self.exploration = None
+        self.explorations: Dict[str, Exploration] = {}
         self.explorer = explorer
-        self.memory_space = explorer.memory_space
+        self.memory_spaces = explorer.memory_spaces
         self._profiling_iterations = profiling_iterations
 
     def exploration_init(self):
-        self.exploration = Exploration()
+        for model_name, memory_space in self.memory_spaces.items():
+            self.explorations[model_name] = Exploration()
 
-        self._explore_first_config()
+            self._explore_first_config()
 
-        index = math.ceil(len(self.memory_space) / 3)
+            index = math.ceil(len(memory_space) / 3)
 
-        for memory in [self.memory_space[index], self.memory_space[-1]]:
-            try:
-                self.update_exploration(memory_mb=memory)
+            for memory in [memory_space[index], memory_space[-1]]:
+                try:
+                    self.update_exploration(memory_mb=memory)
 
-            except SamplingError as e:
-                logger.error(e)
-                raise
+                except SamplingError as e:
+                    logger.error(e)
+                    raise
 
     def _explore_first_config(self):
-        while len(self.memory_space) >= 3:
-            try:
-                self.update_exploration(memory_mb=int(self.memory_space[0]))
+        for model_name, memory_space in self.memory_spaces.items():
+            while len(memory_space) >= 3:
+                try:
+                    self.update_exploration(memory_mb=int(memory_space[0]))
 
-            except NotEnoughMemory as e:
-                logger.info(
-                    f"Trying with new memories. {self.explorer.invoker._function_name}: {self.memory_space[0]}MB"
-                )
-                self.memory_space = np.array(
-                    [
-                        mem
-                        for mem in self.memory_space
-                        if mem >= self.memory_space[0] + 128
-                    ],
-                    dtype=int,
-                )
+                except NotEnoughMemory as e:
+                    logger.info(
+                        f"Trying with new memories. {self.explorer.invoker._function_name}: {memory_space[0]}MB for model: {model_name}"
+                    )
+                    self.memory_spaces[model_name] = np.array(
+                        [mem for mem in memory_space if mem >= memory_space[0] + 128],
+                        dtype=int,
+                    )
 
-            except SamplingError as e:
-                logger.error(e)
-                raise
+                except SamplingError as e:
+                    logger.error(e)
+                    raise
 
-            else:
-                break
+                else:
+                    break
 
-        if len(self.memory_space) <= 3:
-            raise NoMemoryLeft()
+            if len(memory_space) <= 3:
+                raise NoMemoryLeft()
 
-    def update_exploration(self, memory_mb: int):
+    def update_exploration(self, memory_mb: int, model_name: str = "default"):
         logger.info(
-            f"Exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}"
+            f"Exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name} for model: {model_name}"
         )
         try:
             durations = self.explorer.explore_multi_threading(
@@ -88,14 +87,14 @@ class Sampler:
             Sample(memory_mb=memory_mb, duration_ms=duration) for duration in durations
         ]
 
-        if self.exploration is None:
+        if model_name not in self.explorations or self.explorations[model_name] is None:
             raise ValueError(
                 "Exploration object is not initialized. Call exploration_init() first."
             )
-        self.exploration.add_sample(subsample)
+        self.explorations[model_name].add_sample(subsample)
 
         logger.info(
-            f"Finished exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}: {durations} ms"
+            f"Finished exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name}: {durations} ms for model: {model_name}"
         )
 
     def _explore_dynamically(self, durations: list):
