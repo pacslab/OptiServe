@@ -1,6 +1,6 @@
 import numpy as np
 
-from utils.sample import Sample
+from src.utils.sample import Sample
 from typing import Optional, List, Union
 
 

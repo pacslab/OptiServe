@@ -11,6 +11,7 @@ from src.profiler.config_manager import ConfigManager
 from src.utils.logger import logger
 from src.exceptions import InvocationError
 from src.analytics.log_parser import LogParser
+from typing import List, Optional, Tuple, Union, Dict
 
 
 class Explorer:
@@ -19,10 +20,13 @@ class Explorer:
         function_name: str,
         max_invocations: int,
         boto_session: boto3.Session,
-        payload: str = None,
-        memory_bounds: tuple = (128, 3009),
+        payload: Optional[str] = None,
+        memory_bounds: Union[Tuple[int, int], List[Tuple[int, int]]] = (128, 3009),
+        available_models: Optional[List[str]] = None,
         memory_space_step: int = 1,
     ):
+        self.available_models = available_models
+
         self.log_parser = LogParser()
         self.config_manager = ConfigManager(
             function_name=function_name, boto_session=boto_session
@@ -37,45 +41,75 @@ class Explorer:
         )
         self.payload = payload
         self.memory_bounds = memory_bounds
-        self.memory_space = np.array(
-            list(set(range(*memory_bounds, memory_space_step))), dtype=int
-        )
+        self.memory_spaces: Dict[str, np.ndarray] = {}
+        if isinstance(memory_bounds, List) and available_models is not None:
+            for model_name, bounds in zip(available_models, memory_bounds):
+                self.memory_spaces[model_name] = np.array(
+                    list(set(range(bounds[0], bounds[1], memory_space_step))),
+                    dtype=int,
+                )
+        elif isinstance(memory_bounds, Tuple):
+            self.memory_spaces["None"] = np.array(
+                list(set(range(memory_bounds[0], memory_bounds[1], memory_space_step))),
+                dtype=int,
+            )
 
-        self.cost = 0
-        self._memory_config_mb = 0
+        # self._memory_config_mb = 0
 
-    def _explore(self, memory_mb: int = None, enable_cost_calculation: bool = True):
-        if memory_mb:
-            self.config_manager.set_config(memory_mb=memory_mb)
+    def _explore(
+        self,
+        memory_mb: Optional[int] = None,
+        enable_cost_calculation: bool = True,
+        model_name: Optional[str] = None,
+    ):
+        if memory_mb is not None or model_name is not None:
+            self.config_manager.set_config(memory_mb=memory_mb, model_name=model_name)
             self._memory_config_mb = memory_mb
 
             # Cold start
-            self._explore(enable_cost_calculation=enable_cost_calculation)
+            self._explore(
+                enable_cost_calculation=enable_cost_calculation, model_name=model_name
+            )
 
         try:
+            if self.payload is None:
+                raise InvocationError("No payload provided.")
             exec_log = self.invoker.invoke_to_get_duration(payload=self.payload)
             exec_time = self.log_parser.parse_function_execution_time(log=exec_log)
 
         except InvocationError as e:
             logger.error(e)
-            if enable_cost_calculation:
-                self.cost += self.cost_calculator.calculate_cost(
-                    memory_mb=self._memory_config_mb, duration_ms=e.duration_ms
-                )
+            # e_duration_ms = e.duration_ms
+            # if (
+            #     enable_cost_calculation
+            #     and self._memory_config_mb is not None
+            #     and e_duration_ms is not None
+            # ):
+            #     self.cost += self.cost_calculator.calculate_cost(
+            #         memory_mb=self._memory_config_mb, duration_ms=e_duration_ms
+            #     )
             raise
 
         else:
-            if enable_cost_calculation:
-                self.cost += self.cost_calculator.calculate_cost(
-                    memory_mb=self._memory_config_mb, duration_ms=exec_time
-                )
+            # if (
+            #     enable_cost_calculation
+            #     and self._memory_config_mb is not None
+            #     and isinstance(exec_time, (int, float, np.ndarray))
+            # ):
+            #     self.cost += self.cost_calculator.calculate_cost(
+            #         memory_mb=self._memory_config_mb, duration_ms=exec_time
+            #     )
             return exec_time
 
     def explore_multi_threading(
-        self, num_of_invocations: int, num_of_threads: int, memory_mb: int = None
+        self,
+        num_of_invocations: int,
+        num_of_threads: int,
+        memory_mb: Optional[int] = None,
+        model_name: Optional[str] = None,
     ):
-        if memory_mb:
-            self.config_manager.set_config(memory_mb=memory_mb)
+        if memory_mb is not None or model_name is not None:
+            self.config_manager.set_config(memory_mb=memory_mb, model_name=model_name)
             self._memory_config_mb = memory_mb
 
             # Cold start
@@ -89,7 +123,9 @@ class Explorer:
         with ThreadPoolExecutor(max_workers=num_of_threads) as executor:
             futures = [
                 executor.submit(
-                    self._explore, memory_mb=None, enable_cost_calculation=False
+                    self._explore,
+                    memory_mb=None,
+                    enable_cost_calculation=False,
                 )
                 for _ in range(num_of_invocations)
             ]
@@ -102,30 +138,37 @@ class Explorer:
 
                     if error is None:
                         error = e
-                    # TODO: Handle this properly
-                    self.cost += self.cost_calculator.calculate_cost(
-                        self._memory_config_mb, e.duration_ms
-                    )
+
+                    # if self._memory_config_mb is not None and isinstance(
+                    #     e, InvocationError
+                    # ):
+                    #     e_duration_ms = e.duration_ms
+                    #     if e_duration_ms is not None:
+                    #         self.cost += self.cost_calculator.calculate_cost(
+                    #             self._memory_config_mb, e_duration_ms
+                    #         )
 
                     continue
 
         if error:
             raise error
 
-        self.cost += np.sum(
-            self.cost_calculator.calculate_cost(
-                self._memory_config_mb, np.array(results)
-            )
-        )
+        # if self._memory_config_mb is not None:
+        #     self.cost += np.sum(
+        #         self.cost_calculator.calculate_cost(
+        #             self._memory_config_mb, np.array(results)
+        #         )
+        #     )
 
         return results
 
     def explore_all_memories(self, num_of_invocations: int):
-        for memory_mb in tqdm(
-            self.memory_space,
-            desc="Processing",
-            bar_format="{l_bar}{bar} [Elapsed: {elapsed} | Remaining: {remaining}]",
-        ):
-            _ = self.explore_multi_threading(
-                num_of_invocations, num_of_invocations, memory_mb
-            )
+        for _, memory_space in self.memory_spaces.items():
+            for memory_mb in tqdm(
+                memory_space,
+                desc="Processing",
+                bar_format="{l_bar}{bar} [Elapsed: {elapsed} | Remaining: {remaining}]",
+            ):
+                _ = self.explore_multi_threading(
+                    num_of_invocations, num_of_invocations, memory_mb
+                )
