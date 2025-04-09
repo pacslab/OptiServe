@@ -49,7 +49,7 @@ class Explorer:
                     dtype=int,
                 )
         elif isinstance(memory_bounds, Tuple):
-            self.memory_spaces["default"] = np.array(
+            self.memory_spaces["None"] = np.array(
                 list(set(range(memory_bounds[0], memory_bounds[1], memory_space_step))),
                 dtype=int,
             )
@@ -67,7 +67,9 @@ class Explorer:
             self._memory_config_mb = memory_mb
 
             # Cold start
-            self._explore(enable_cost_calculation=enable_cost_calculation)
+            self._explore(
+                enable_cost_calculation=enable_cost_calculation, model_name=model_name
+            )
 
         try:
             if self.payload is None:
@@ -121,7 +123,9 @@ class Explorer:
         with ThreadPoolExecutor(max_workers=num_of_threads) as executor:
             futures = [
                 executor.submit(
-                    self._explore, memory_mb=None, enable_cost_calculation=False
+                    self._explore,
+                    memory_mb=None,
+                    enable_cost_calculation=False,
                 )
                 for _ in range(num_of_invocations)
             ]
