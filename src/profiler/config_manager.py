@@ -5,7 +5,7 @@ from botocore.exceptions import (
     ParamValidationError,
 )
 
-from profiler.function_config import FunctionConfig
+from src.profiler.function_config import FunctionConfig
 
 from src.utils.logger import logger
 from src.exceptions import (
@@ -61,6 +61,9 @@ class ConfigManager:
         model_name: Optional[str] = None,
     ):
         try:
+            if model_name == "None":
+                model_name = None
+
             config = self._aws_lambda_client.get_function_configuration(
                 FunctionName=self._function_name
             )

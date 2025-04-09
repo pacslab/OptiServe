@@ -37,8 +37,8 @@ class Optimizer:
             or termination_value > self.objectives[model_name].termination_threshold
         )
 
-    def _initialize(self, model_name: str):
-        self.sampler.exploration_init()
+    def _initialize(self, model_name: str = "None"):
+        self.sampler.exploration_init(model_name=model_name)
 
         exploration = self.sampler.explorations[model_name]
 
@@ -55,7 +55,7 @@ class Optimizer:
 
     def _update(self, memory_mb: int, model_name: str):
         try:
-            self.sampler.update_exploration(memory_mb)
+            self.sampler.update_exploration(memory_mb, model_name=model_name)
         except NotEnoughMemory as e:
             logger.error(
                 f"Trying with new memories. {self.sampler.explorer.invoker._function_name}: {memory_mb}MB"
@@ -94,10 +94,9 @@ class Optimizer:
 
         return remainder_memories[np.argmin(values)]
 
-    def start(self):
-        for model_name in self.objectives.keys():
-            self._initialize(model_name=model_name)
+    def start(self, model_name: str = "None"):
+        self._initialize(model_name=model_name)
 
-            while not self._is_terminated(model_name=model_name):
-                memory = self._select_next_memory_to_explore(model_name=model_name)
-                self._update(memory_mb=memory, model_name=model_name)
+        while not self._is_terminated(model_name=model_name):
+            memory = self._select_next_memory_to_explore(model_name=model_name)
+            self._update(memory_mb=memory, model_name=model_name)

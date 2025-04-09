@@ -25,48 +25,61 @@ class Sampler:
         self.memory_spaces = explorer.memory_spaces
         self._profiling_iterations = profiling_iterations
 
-    def exploration_init(self):
-        for model_name, memory_space in self.memory_spaces.items():
-            self.explorations[model_name] = Exploration()
+    def exploration_init(self, model_name: str = "None"):
+        if model_name not in self.explorer.memory_spaces:
+            raise ValueError(
+                f"Model name '{model_name}' is not available in the memory spaces."
+            )
 
-            self._explore_first_config()
+        memory_space = self.explorer.memory_spaces[model_name]
+        self.explorations[model_name] = Exploration()
 
-            index = math.ceil(len(memory_space) / 3)
+        self._explore_first_config(model_name=model_name)
 
-            for memory in [memory_space[index], memory_space[-1]]:
-                try:
-                    self.update_exploration(memory_mb=memory)
+        index = math.ceil(len(memory_space) / 3)
 
-                except SamplingError as e:
-                    logger.error(e)
-                    raise
+        for memory in [memory_space[index], memory_space[-1]]:
+            try:
+                self.update_exploration(memory_mb=memory, model_name=model_name)
 
-    def _explore_first_config(self):
-        for model_name, memory_space in self.memory_spaces.items():
-            while len(memory_space) >= 3:
-                try:
-                    self.update_exploration(memory_mb=int(memory_space[0]))
+            except SamplingError as e:
+                logger.error(e)
+                raise
 
-                except NotEnoughMemory as e:
-                    logger.info(
-                        f"Trying with new memories. {self.explorer.invoker._function_name}: {memory_space[0]}MB for model: {model_name}"
-                    )
-                    self.memory_spaces[model_name] = np.array(
-                        [mem for mem in memory_space if mem >= memory_space[0] + 128],
-                        dtype=int,
-                    )
+    def _explore_first_config(self, model_name: str = "None"):
+        if model_name not in self.explorer.memory_spaces:
+            raise ValueError(
+                f"Model name '{model_name}' is not available in the memory spaces."
+            )
 
-                except SamplingError as e:
-                    logger.error(e)
-                    raise
+        memory_space = self.explorer.memory_spaces[model_name]
 
-                else:
-                    break
+        while len(memory_space) >= 3:
+            try:
+                self.update_exploration(
+                    memory_mb=int(memory_space[0]), model_name=model_name
+                )
 
-            if len(memory_space) <= 3:
-                raise NoMemoryLeft()
+            except NotEnoughMemory as e:
+                logger.info(
+                    f"Trying with new memories. {self.explorer.invoker._function_name}: {memory_space[0]}MB for model: {model_name}"
+                )
+                self.memory_spaces[model_name] = np.array(
+                    [mem for mem in memory_space if mem >= memory_space[0] + 128],
+                    dtype=int,
+                )
 
-    def update_exploration(self, memory_mb: int, model_name: str = "default"):
+            except SamplingError as e:
+                logger.error(e)
+                raise
+
+            else:
+                break
+
+        if len(memory_space) <= 3:
+            raise NoMemoryLeft()
+
+    def update_exploration(self, memory_mb: int, model_name: str = "None"):
         logger.info(
             f"Exploring memory configuration: {memory_mb} MB for {self.explorer.invoker._function_name} for model: {model_name}"
         )
@@ -75,6 +88,7 @@ class Sampler:
                 num_of_invocations=self._profiling_iterations,
                 num_of_threads=self._profiling_iterations,
                 memory_mb=memory_mb,
+                model_name=model_name,
             )
 
         except SamplingError as e:
