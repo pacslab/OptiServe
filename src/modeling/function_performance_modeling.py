@@ -115,3 +115,15 @@ class FunctionPerformanceModeling:
         return lambda x: self.param_functions[model_name].function(
             x, *self.param_functions[model_name].params
         )
+
+    def get_performance(
+        self,
+        memory_mb: float,
+        model_name: Optional[str] = None,
+    ) -> float:
+        if model_name is None:
+            model_name = self.available_models[0]
+
+        return self.get_performance_model_as_function(
+            model_name=model_name,
+        )(memory_mb)

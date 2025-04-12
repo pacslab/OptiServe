@@ -63,8 +63,8 @@ class CostCalculator:
 
             for group in price_groups:
                 for price in response["PriceList"]:
-                    if re.search(f'"group"\s*:\s*"{group}"', price):
-                        all_results = re.findall('\{"USD"\s*:\s*"[.\d]*"}', price)
+                    if re.search(f'"group"\s*:\s*"{group}"', price):  # type: ignore
+                        all_results = re.findall('\{"USD"\s*:\s*"[.\d]*"}', price)  # type: ignore
 
                         if all_results:
                             prices_per_tier = map(
