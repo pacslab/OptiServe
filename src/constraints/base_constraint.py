@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from src.utils.function import Function
+from src.application.function import Function
 from typing import List
 
 
