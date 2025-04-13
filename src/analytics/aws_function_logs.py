@@ -47,9 +47,7 @@ class AWSFunctionLogs(AWSLogs):
             raise ValueError("start_time and end_time must be provided")
 
         if self.docker_deploy:
-            query_string = (
-                "fields @timestamp, @message, @logStream | sort @timestamp asc"
-            )
+            query_string = "fields @timestamp, @message, @logStream | filter @message like /platform\\.report/ | sort @timestamp asc"
         else:
             query_string = "fields @timestamp, @message, @logStream| filter @message like 'REPORT'| sort @timestamp desc"
 
