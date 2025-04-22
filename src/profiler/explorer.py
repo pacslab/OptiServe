@@ -163,12 +163,12 @@ class Explorer:
         return results
 
     def explore_all_memories(self, num_of_invocations: int):
-        for _, memory_space in self.memory_spaces.items():
+        for model_name, memory_space in self.memory_spaces.items():
             for memory_mb in tqdm(
                 memory_space,
                 desc="Processing",
                 bar_format="{l_bar}{bar} [Elapsed: {elapsed} | Remaining: {remaining}]",
             ):
                 _ = self.explore_multi_threading(
-                    num_of_invocations, num_of_invocations, memory_mb
+                    num_of_invocations, num_of_invocations, memory_mb, model_name
                 )
