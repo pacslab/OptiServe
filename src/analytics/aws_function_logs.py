@@ -47,9 +47,7 @@ class AWSFunctionLogs(AWSLogs):
             raise ValueError("start_time and end_time must be provided")
 
         if self.docker_deploy:
-            query_string = (
-                "fields @timestamp, @message, @logStream | sort @timestamp asc"
-            )
+            query_string = "fields @timestamp, @message, @logStream | filter type = 'platform.report' or (logger = 'root' and message like /Starting execution/) | sort @timestamp asc"
         else:
             query_string = "fields @timestamp, @message, @logStream| filter @message like 'REPORT'| sort @timestamp desc"
 
@@ -102,14 +100,15 @@ class AWSFunctionLogs(AWSLogs):
             for log_stream, events in stream_logs.items():
                 model_name = "unknown"
                 for ev in events:
-                    message = ev.get("@message", "")
+                    message = ev.get("RawMessage", "")
                     match = pattern.search(message)
                     if match:
                         extracted_model = match.group(1)
                         model_name = extracted_model
                         break
 
-                logs_by_model.setdefault(model_name, []).extend(events)
+                relevant_events = [event for event in events if "Duration" in event]
+                logs_by_model.setdefault(model_name, []).extend(relevant_events)
 
             # If no model marker was found in any log stream (i.e. only "unknown" exists),
             # then return a flat list of all log events.
