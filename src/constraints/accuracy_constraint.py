@@ -31,12 +31,12 @@ class AccuracyConstraint(BaseConstraint):
         self,
         min_accuracy: float,
         max_accuracy: float,
-        end_to_end_accuracy_formual: EndToEndAccuracyFormula,
+        end_to_end_accuracy_formula: EndToEndAccuracyFormula,
     ):
         self.min_accuracy = min_accuracy
         self.max_accuracy = max_accuracy
-        self.end_to_end_accuracy_formual = end_to_end_accuracy_formual
+        self.end_to_end_accuracy_formula = end_to_end_accuracy_formula
 
     def is_satisfied(self, solution: List[Function]) -> bool:
-        eas = self.end_to_end_accuracy_formual.calculate_accuracy(solution)
+        eas = self.end_to_end_accuracy_formula.calculate_accuracy(solution)
         return self.min_accuracy <= eas <= self.max_accuracy

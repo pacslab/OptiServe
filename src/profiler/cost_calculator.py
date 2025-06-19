@@ -22,6 +22,8 @@ class CostCalculator:
     ):
         if not self.aws_pricing_units:
             self.aws_pricing_units = self._get_amazon_pricing_units()
+        
+        print(self.aws_pricing_units)
 
         memory_gb = memory_mb / 1024.0
         duration_s = np.ceil(duration_ms) / 1000.0

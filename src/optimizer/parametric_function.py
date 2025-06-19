@@ -12,6 +12,12 @@ from src.exceptions import (
 
 @dataclass
 class ParamFunction:
+    
+    """
+    A class representing a parametric function for modeling the execution time of a function based on allocated memory.
+    This class uses a curve fitting approach to model the relationship between memory allocation and execution time.
+    It defines a callable function that can be used to predict execution time based on memory allocation.
+    """
 
     function: callable = lambda x, a0, a1, a2: (
         (a0 + a1 * np.exp(-x / a2)) if a2 != 0 else a0

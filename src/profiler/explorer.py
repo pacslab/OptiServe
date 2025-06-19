@@ -45,12 +45,12 @@ class Explorer:
         if isinstance(memory_bounds, List) and available_models is not None:
             for model_name, bounds in zip(available_models, memory_bounds):
                 self.memory_spaces[model_name] = np.array(
-                    list(set(range(bounds[0], bounds[1], memory_space_step))),
+                    sorted(list(set(range(bounds[0], bounds[1], memory_space_step)))),
                     dtype=int,
                 )
         elif isinstance(memory_bounds, Tuple):
             self.memory_spaces["None"] = np.array(
-                list(set(range(memory_bounds[0], memory_bounds[1], memory_space_step))),
+                sorted(list(set(range(memory_bounds[0], memory_bounds[1], memory_space_step)))),
                 dtype=int,
             )
 
