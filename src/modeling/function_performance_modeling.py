@@ -101,20 +101,20 @@ class FunctionPerformanceModeling:
             return next(iter(results.values()))
         else:
             return results
-
-    def get_performance_model_as_function(
+        
+    
+    def get_performance_model(
         self,
         model_name: Optional[str] = None,
-    ):
+    ) -> ParamFunction:
         if model_name is None:
             model_name = self.available_models[0]
 
-        if not self._explored:
+        if not self._explored[model_name]:
             self.run(model_name=model_name)
 
-        return lambda x: self.param_functions[model_name].function(
-            x, *self.param_functions[model_name].params
-        )
+        return self.param_functions[model_name]
+
 
     def get_performance(
         self,

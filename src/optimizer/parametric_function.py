@@ -1,13 +1,31 @@
 from dataclasses import dataclass
 
 import numpy as np
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from scipy.optimize import curve_fit
 from src.utils.exploration import Exploration
 from src.utils.logger import logger
 from src.exceptions import (
     UnfeasibleConstraint,
 )
+from pathlib import Path
+
+
+def model_function(x, a0, a1, a2):
+    """
+    A model function that describes the relationship between memory allocation and execution time.
+    This function is used for curve fitting to find the best parameters for the model.
+    
+    Parameters:
+    - x: Memory allocation (independent variable).
+    - a0: Intercept parameter.
+    - a1: Exponential decay parameter.
+    - a2: Scale parameter for the exponential decay.
+    
+    Returns:
+    - Computed execution time based on the model.
+    """
+    return (a0 + a1 * np.exp(-x / a2)) if a2 != 0 else a0
 
 
 @dataclass
@@ -19,11 +37,10 @@ class ParamFunction:
     It defines a callable function that can be used to predict execution time based on memory allocation.
     """
 
-    function: callable = lambda x, a0, a1, a2: (
-        (a0 + a1 * np.exp(-x / a2)) if a2 != 0 else a0
-    )
+    function: callable = model_function
     bounds: tuple = ([-np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf])
     params: Any = None
+
 
     def __call__(self, x: np.ndarray):
         return self.function(x, *self.params)
@@ -67,3 +84,17 @@ class ParamFunction:
                 costs = costs[feasible_memories]
 
         return memory_space[np.argmin(costs)]
+    
+    
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "ParamFunction":
+        import joblib
+
+        return joblib.load(path)
+    
+    
+    def save(self, path: Union[str, Path]) -> None:
+        import joblib
+
+        joblib.dump(self, path)
+        logger.info(f"ParamFunction saved to {path}.")
