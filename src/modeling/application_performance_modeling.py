@@ -52,13 +52,7 @@ class ApplicationPerformanceModeling:
         self.mem = nx.get_node_attributes(self.workflow_graph,
                                           'mem')  # Memory configuration of each function in the workflow
         
-        self.cost_calulator = CostCalculator()
-        
-        self.pricing_units = self.cost_calulator._get_amazon_pricing_units()
-            
-        self.price_per_gbs = self.pricing_units["compute"]
-        self.price_per_request = self.pricing_units["request"]
-            
+        self.cost_calculator = CostCalculator()
 
         self.ne = {}
         self.approximations = []
@@ -87,7 +81,7 @@ class ApplicationPerformanceModeling:
         start = 1 - include_start_node
         end = -1 if not include_end_node else None
         start_edge = 1 - include_first_edge_delay
-        end_edge = -1 if not include_first_edge_delay else None
+        end_edge = -1 if not include_last_edge_delay else None
         
         if (type(paths[0]) == list):
             rt_results = []
@@ -240,11 +234,20 @@ class ApplicationPerformanceModeling:
     def get_avg_cost(self):
         num_exe = [item for item in self.ne.values()]
         self.mem = nx.get_node_attributes(self.workflow_graph, 'mem')
-        mem_cost = [self.cost_calulator.calculate_cost(memory_mb=item, duration_ms=1000, calculate_invocation_cost=False) for item in self.mem.values()]
         self.rt = nx.get_node_attributes(self.workflow_graph, 'rt')
-        billed_duration = [np.ceil(item / 100) for item in self.rt.values()]
-        avg_cost = np.multiply((np.multiply(mem_cost, billed_duration) + self.price_per_request), num_exe)
-        return np.sum(avg_cost) * 1000000
+        
+        mem_cost = [
+            self.cost_calculator.calculate_cost(
+                memory_mb=mem,
+                duration_ms=rt,
+                calculate_invocation_cost=True
+            )
+            for mem, rt in zip(self.mem.values(), self.rt.values())
+        ]
+
+        avg_cost = np.multiply(mem_cost, num_exe)
+        
+        return np.sum(avg_cost) * 1_000_000
 
 
     def get_rttp_for_paths_with_b_node(self, paths_with_b_node):
