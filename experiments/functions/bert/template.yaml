@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Timeout: 900
+    MemorySize: 3008
+    Tracing: Active
+    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    LoggingConfig:
+      LogFormat: JSON
+  Api:
+    BinaryMediaTypes:
+    - image/png
+    - image/jpg
+    - image/jpeg
+
+    TracingEnabled: true
+Resources:
+  InferenceFunctionBERT:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      FunctionName: bert
+      PackageType: Image
+      Architectures:
+      - x86_64
+      Events:
+        Inference:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /detection
+            Method: post
+      Environment:
+        Variables:
+          TRANSFORMERS_CACHE: /tmp
+          HF_HOME: /tmp
+      Role: arn:aws:iam::123456789012:role/lambda-role # Explicit IAM Role used by the Inference function
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./app
+      DockerTag: 2-v1
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+Outputs:
+  InferenceApi:
+    Description: API Gateway endpoint URL for Prod stage for Inference function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/detection/"
+  InferenceFunctionBERT:
+    Description: Inference Lambda Function ARN
+    Value: !GetAtt InferenceFunctionBERT.Arn
+  InferenceFunctionIamRole:
+    Description: Explicit IAM Role used by the Inference function
+    Value: "arn:aws:iam::123456789012:role/lambda-role"

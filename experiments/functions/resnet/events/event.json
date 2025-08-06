@@ -1,0 +1,6 @@
+{
+  "bucket_name": "test-images-mohammad",
+  "num_images": 24,
+  "batch_size": 4,
+  "model_name": "resnet-152"
+}

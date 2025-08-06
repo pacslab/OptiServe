@@ -1,0 +1,6 @@
+{
+    "task": "question-answering",
+    "model_name": "bert-base-uncased",
+    "question": "Where is Hugging Face based?",
+    "context": "Hugging Face Inc. is based in New York City."
+  }

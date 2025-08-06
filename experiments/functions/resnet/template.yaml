@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Timeout: 900         # Timeout is in seconds
+    MemorySize: 3008      # Memory size is in megabytes (MB)
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+  Api:
+    BinaryMediaTypes:
+      - image/png
+      - image/jpg
+      - image/jpeg
+    TracingEnabled: true
+
+Resources:
+  InferenceFunctionResnet:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: resnet
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Role: arn:aws:iam::123456789012:role/lambda-role
+      Events:
+        Inference:
+          Type: Api
+          Properties:
+            Path: /classify_digit
+            Method: post
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./app
+      DockerTag: 2-v1
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name: 
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+
+Outputs:
+  InferenceApi:
+    Description: API Gateway endpoint URL for Prod stage for Inference function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/classify_digit/"
+  InferenceFunctionResnet:
+    Description: Inference Lambda Function ARN
+    Value: !GetAtt InferenceFunctionResnet.Arn
+  InferenceFunctionIamRole:
+    Description: Explicit IAM Role used by the Inference function
+    Value: "arn:aws:iam::123456789012:role/lambda-role"

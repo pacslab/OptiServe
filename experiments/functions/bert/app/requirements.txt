@@ -1,0 +1,8 @@
+# Use PyPI as the primary index:
+--index-url https://pypi.org/simple
+
+# Add the PyTorch wheels index as a fallback for torch packages
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch
+transformers

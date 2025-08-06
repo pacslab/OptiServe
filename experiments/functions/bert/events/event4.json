@@ -1,0 +1,5 @@
+{
+    "task": "text-generation",
+    "model_name": "distilgpt2",
+    "text": "Hello, I'm a language model, and"
+  }

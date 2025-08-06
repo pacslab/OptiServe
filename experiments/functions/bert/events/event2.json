@@ -1,0 +1,5 @@
+{
+    "task": "ner",
+    "model_name": "bert-base-uncased",
+    "text": "Hugging Face Inc. is based in New York City."
+  }
