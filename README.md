@@ -35,7 +35,7 @@ We used **Python 3.11.13** to develop and test OptiServe. You can install the de
 1. Clone the project and move into the root directory:
 
 ```bash
-git clone https://github.com/your-username/optiserve.git
+git clone https://github.com/2arian3/optiserve.git
 cd optiserve
 ```
 
