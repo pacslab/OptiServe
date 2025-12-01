@@ -10,9 +10,8 @@ from typing import Optional, Union
 
 
 class CostCalculator:
-    def __init__(self, function_name: Optional[str] = None):
+    def __init__(self):
         self.aws_pricing_units = None
-        self._function_name = function_name
 
     def calculate_cost(
         self,

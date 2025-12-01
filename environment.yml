@@ -16,4 +16,3 @@ dependencies:
   - pip
   - pip:
       - matplotlib==3.9.0
-      - sagemaker==2.224.4

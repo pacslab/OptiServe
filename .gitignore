@@ -166,3 +166,5 @@ cython_debug/
 
 *.csv
 .mdl
+logs/
+modeled_functions/

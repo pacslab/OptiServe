@@ -28,17 +28,19 @@ class Explorer:
         self.available_models = available_models
 
         self.log_parser = LogParser()
+
         self.config_manager = ConfigManager(
             function_name=function_name, boto_session=boto_session
         )
+
         self.invoker = Invoker(
             function_name=function_name,
             max_invocations=max_invocations,
             boto_session=boto_session,
         )
-        self.cost_calculator = CostCalculator(
-            function_name=function_name,
-        )
+
+        self.cost_calculator = CostCalculator()
+
         self.payload = payload
         self.memory_bounds = memory_bounds
         self.memory_spaces: Dict[str, np.ndarray] = {}

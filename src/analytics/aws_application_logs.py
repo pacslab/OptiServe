@@ -9,7 +9,6 @@ from src.exceptions import (
 )
 
 from collections import defaultdict
-
 from src.analytics.aws_logs import AWSLogs
 
 
@@ -25,7 +24,7 @@ class AWSApplicationLogs(AWSLogs):
             raise ValueError('application_name must be provided')
         
         self._application_name = application_name
-        self._log_group_name = f'/aws/vendedlogs/states/{self._application_name}-Logs'
+        self._log_group_name = f'/aws/vendedlogs/states/{self._application_name}'
         self._max_invocation_attempts = 5
         self._total_logs_limit = total_logs_limit
         self._sleep_interval = 1

@@ -9,6 +9,7 @@ from src.exceptions import (
     UnfeasibleConstraint,
 )
 from pathlib import Path
+import joblib
 
 
 def model_function(x, a0, a1, a2):
@@ -88,13 +89,12 @@ class ParamFunction:
     
     @classmethod
     def load(cls, path: Union[str, Path]) -> "ParamFunction":
-        import joblib
 
         return joblib.load(path)
     
     
     def save(self, path: Union[str, Path]) -> None:
-        import joblib
-
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self, path)
         logger.info(f"ParamFunction saved to {path}.")
