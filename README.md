@@ -35,13 +35,13 @@ We used **Python 3.11.13** to develop and test OptiServe. You can install the de
 1. Clone the project and move into the root directory:
 
 ```bash
-git clone https://github.com/2arian3/optiserve.git
+git clone https://github.com/pacslab/optiserve.git
 cd optiserve
 ```
 
 2. Install dependencies:
 
-<details>
+<details open>
 <summary><strong>Option A: Using Conda</strong></summary>
 
 ```bash
@@ -51,7 +51,7 @@ conda activate optiserve
 
 </details>
 
-<details>
+<details open>
 <summary><strong>Option B: Using pip</strong></summary>
 
 ```bash
