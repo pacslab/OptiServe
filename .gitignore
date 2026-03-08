@@ -168,3 +168,6 @@ cython_debug/
 .mdl
 logs/
 modeled_functions/
+# Generated experiment artifacts (reproducible; regenerating requires live AWS)
+App*_accuracy.npy
+/*.pdf

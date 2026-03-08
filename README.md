@@ -24,13 +24,10 @@ Serverless computing simplifies deployment, but makes it harder to tune performa
 
 ## 🛠 How to install?
 
-Create a .env file in the root direcoty based on .env.example template and enter you AWS credentials.
-```bash
-cp .env.example .env
-vi .env
-```
-
-We used **Python 3.11.13** to develop and test OptiServe. You can install the dependencies using either `conda` or `pip`. Make sure you're using **Python 3.11** if installing manually with `pip`.
+OptiServe is a standard Python package (`pyproject.toml`). We developed and
+tested it on **Python 3.11**. AWS credentials are read from the standard AWS
+credential chain (environment variables, `~/.aws/credentials`, or an instance
+role) — no `.env` file is required for the library itself.
 
 1. Clone the project and move into the root directory:
 
@@ -39,10 +36,20 @@ git clone https://github.com/pacslab/optiserve.git
 cd optiserve
 ```
 
-2. Install dependencies:
+2. Install the package (editable install recommended for development):
 
 <details open>
-<summary><strong>Option A: Using Conda</strong></summary>
+<summary><strong>Option A: Using pip (canonical)</strong></summary>
+
+```bash
+python -m pip install -e .                 # core library
+python -m pip install -e ".[experiments]"  # + notebook / benchmark deps
+```
+
+</details>
+
+<details open>
+<summary><strong>Option B: Using Conda</strong></summary>
 
 ```bash
 conda env create -f environment.yml
@@ -51,14 +58,8 @@ conda activate optiserve
 
 </details>
 
-<details open>
-<summary><strong>Option B: Using pip</strong></summary>
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-</details>
+> Dependencies are declared once, in `pyproject.toml`. `requirements.txt` mirrors
+> the core runtime deps for convenience; `environment.yml` provides a Conda path.
 
 ## ▶️ How to use?
 
