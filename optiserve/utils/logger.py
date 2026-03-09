@@ -1,8 +1,7 @@
-import logging
+"""Backward-compatible shim. The logging implementation now lives in
+``optiserve.logging``; prefer ``from optiserve.logging import get_logger``.
+This module is retained so existing ``from optiserve.utils.logger import logger``
+imports keep working while modules migrate."""
+from optiserve.logging import configure_logging, get_logger, logger
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-logger = logging.getLogger(__name__)
+__all__ = ["logger", "get_logger", "configure_logging"]
