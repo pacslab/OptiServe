@@ -5,7 +5,7 @@ import itertools
 import warnings
 
 
-from optiserve.profiler.cost_calculator import CostCalculator
+from optiserve.cost import CostCalculator
 
 
 warnings.filterwarnings("ignore")

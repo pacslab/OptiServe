@@ -5,12 +5,12 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-from optiserve.profiler.invoker import Invoker
-from optiserve.profiler.cost_calculator import CostCalculator
-from optiserve.profiler.config_manager import ConfigManager
+from optiserve.aws.lambda_client import Invoker
+from optiserve.cost import CostCalculator
+from optiserve.aws.lambda_client import ConfigManager
 from optiserve.utils.logger import logger
 from optiserve.exceptions import InvocationError
-from optiserve.analytics.log_parser import LogParser
+from optiserve.aws.log_parser import LogParser
 from typing import List, Optional, Tuple, Union, Dict
 
 
