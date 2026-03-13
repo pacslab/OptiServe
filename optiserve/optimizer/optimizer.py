@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict
 from optiserve.optimizer.objective import Objective
-from optiserve.utils.sampler import Sampler
+from optiserve.profiling.sampler import Sampler
 from optiserve.utils.logger import logger
 from optiserve.exceptions import (
     NotEnoughMemory,

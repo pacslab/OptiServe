@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from typing import Any, Optional, Union
 from scipy.optimize import curve_fit
-from optiserve.utils.exploration import Exploration
+from optiserve.profiling.sample import Exploration
 from optiserve.utils.logger import logger
 from optiserve.exceptions import (
     UnfeasibleConstraint,

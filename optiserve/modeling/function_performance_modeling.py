@@ -1,8 +1,8 @@
 import boto3
 from typing import Optional, Dict, List
-from optiserve.profiler.explorer import Explorer
-from optiserve.utils.exploration import Exploration
-from optiserve.utils.sampler import Sampler
+from optiserve.profiling.explorer import Explorer
+from optiserve.profiling.sample import Exploration
+from optiserve.profiling.sampler import Sampler
 from optiserve.optimizer.objective import Objective
 from optiserve.optimizer.optimizer import Optimizer
 from optiserve.optimizer.parametric_function import ParamFunction
