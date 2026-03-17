@@ -1,21 +1,29 @@
-import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
 import itertools
-import warnings
 
+import networkx as nx
+import numpy as np
 
+from optiserve.config import ModelingConfig
 from optiserve.cost import CostCalculator
+from optiserve.logging import get_logger
+from optiserve.modeling.graph_reduction import discover_cycles
 
-
-warnings.filterwarnings("ignore")
+logger = get_logger(__name__)
 
 
 class ApplicationPerformanceModeling:
-    
-    # This class is used to model the performance of a serverless application in AWS Lambda.
-    def __init__(self, graph, delay_type='SFN'):
-        
+    """Analytical model of a serverless workflow's expected end-to-end response
+    time, cost, and per-function execution counts.
+
+    ``delay_type`` selects the per-node/per-edge transition overhead model:
+    ``'None'`` (0), ``'SFN'`` (AWS Step Functions overheads from
+    :class:`~optiserve.config.ModelingConfig`), or ``'Defined'`` (read from
+    ``'delay'`` node/edge attributes).
+    """
+
+    def __init__(self, graph, delay_type='SFN', config: ModelingConfig = None):
+        self._config = config or ModelingConfig()
+
         if ('Start' in graph.nodes and 'End' in graph.nodes):
             graph.nodes['Start']['rt'] = 0
             graph.nodes['End']['rt'] = 0
@@ -23,9 +31,9 @@ class ApplicationPerformanceModeling:
             graph.nodes['End']['mem'] = 0
             graph.nodes['Start']['perf_profile'] = {0: 0}
             graph.nodes['End']['perf_profile'] = {0: 0}
-            
+
         else:
-            raise Exception('No Start and End points.')
+            raise ValueError('Graph must contain both "Start" and "End" nodes.')
 
         self.workflow_graph = graph.copy()
         self.simple_dag = graph.copy()
@@ -40,13 +48,24 @@ class ApplicationPerformanceModeling:
             self.edge_delay = {edge: 0 for edge in self.workflow_graph.edges}
 
         elif (delay_type == 'SFN'):
-            self.node_delay = {node: 18.81 for node in self.workflow_graph.nodes}
-            self.edge_delay = {edge: 1 for edge in self.workflow_graph.edges}
-            
+            self.node_delay = {
+                node: self._config.sfn_node_delay_ms
+                for node in self.workflow_graph.nodes
+            }
+            self.edge_delay = {
+                edge: self._config.sfn_edge_delay_ms
+                for edge in self.workflow_graph.edges
+            }
+
         elif (delay_type == 'Defined'):
             self.node_delay = nx.get_node_attributes(self.workflow_graph, 'delay')
             self.edge_delay = nx.get_edge_attributes(self.workflow_graph, 'delay')
-            
+
+        else:
+            raise ValueError(
+                f"Unknown delay_type {delay_type!r}; expected 'None', 'SFN', or 'Defined'."
+            )
+
         self.p_node_num = 1
         self.b_node_num = 1
         self.mem = nx.get_node_attributes(self.workflow_graph,
@@ -162,22 +181,7 @@ class ApplicationPerformanceModeling:
                     graph[edge[0]][edge[1]]['weight'] = out_edges[edge] / tp_denominator
                     
             ne = nx.get_node_attributes(graph, 'ne')
-            cycles = [item for item in nx.simple_cycles(graph)]
-            
-            try:
-                cycle_by_dfs = [item[0] for item in nx.find_cycle(graph)]
-                cycle_by_dfs = [item for item in
-                                nx.all_simple_paths(graph, source=cycle_by_dfs[0], target=cycle_by_dfs[-1])]
-                
-                for item in cycle_by_dfs:
-                    if not item in cycles:
-                        cycles.append(item)
-                        
-            except:
-                pass
-            
-            cycles = [cycle for cycle in cycles if (
-                    nx.shortest_path_length(graph, source='Start', target=cycle[0]) < nx.shortest_path_length(graph, source='Start', target=cycle[-1]))]
+            cycles = discover_cycles(graph, self.start_point)
             cycles_dict = {}
             
             for item in cycles:
@@ -289,12 +293,14 @@ class ApplicationPerformanceModeling:
             
         tppt_product = [item for item in itertools.product(*rttp)]
         refined_rt = [(np.max([tup[0] for tup in item])) for item in tppt_product]
-        refined_tp = [(round(np.product([tup[1] for tup in item]), 4)) for item in tppt_product]
+        refined_tp = [(round(np.prod([tup[1] for tup in item]), 4)) for item in tppt_product]
         
         return list(zip(refined_rt, refined_tp))
 
 
     def drawGraph(self, graph):
+        import matplotlib.pyplot as plt  # lazy: plotting is an optional extra
+
         pos = nx.planar_layout(graph)
         nx.draw(graph, pos, with_labels=True)
         labels = nx.get_edge_attributes(graph, 'weight')
@@ -367,12 +373,15 @@ class ApplicationPerformanceModeling:
         
         except nx.NetworkXNoCycle:
             pass
-        
-        b_node_num = len([None for item in self.simple_dag.nodes if type(item) == 'str' and item[0] == 'B'])
-        
-        if b_node_num != 0:
-            return False
-        
+
+        # A standalone B (branch) node is accepted as simple: its rt already
+        # encodes the branch's expected value. B nodes that sit inside a
+        # parallel join are resolved by simplify_parallels() (which runs in
+        # get_simple_dag()'s loop before is_simple() is re-checked), so no
+        # explicit B-node gate is needed here. Enabling a real B-node check
+        # would loop forever on standalone B nodes. (The original code compared
+        # `type(item) == 'str'`, which was always False — a no-op left in place.)
+
         tp_sum = 0
         paths = nx.all_simple_paths(self.simple_dag, self.start_point, self.end_point)
         
@@ -393,18 +402,19 @@ class ApplicationPerformanceModeling:
         self.update_rt()
         
         while (not self.is_simple()):
-            
-            processed = self.simplify_loops()
-            if processed:
+
+            if self.simplify_loops():
                 continue
-            
-            processed = self.simplify_parallels()
-            if processed:
+            if self.simplify_parallels():
                 continue
-            
-            processed = self.simplify_branches()
-            if processed:
+            if self.simplify_branches():
                 continue
+
+            # No reduction pass made progress but the graph is not simple.
+            # Break instead of spinning forever (safety guard for graph shapes
+            # the reductions cannot handle).
+            logger.warning("get_simple_dag could not further reduce the graph.")
+            break
 
 
     def get_approximations(self):
@@ -597,22 +607,7 @@ class ApplicationPerformanceModeling:
     def simplify_loops(self):
         processed = False
         self.process_self_loops()
-        cycles = [item for item in nx.simple_cycles(self.simple_dag)]
-        
-        try:
-            cycle_by_dfs = [item[0] for item in nx.find_cycle(self.simple_dag)]
-            cycle_by_dfs = [item for item in
-                            nx.all_simple_paths(self.simple_dag, source=cycle_by_dfs[0], target=cycle_by_dfs[-1])]
-            for item in cycle_by_dfs:
-                if not item in cycles:
-                    cycles.append(item)
-                    
-        except:
-            pass
-        
-        cycles = [cycle for cycle in cycles if (
-                nx.shortest_path_length(self.simple_dag, source='Start', target=cycle[0]) < nx.shortest_path_length(
-            self.simple_dag, source='Start', target=cycle[-1]))]
+        cycles = discover_cycles(self.simple_dag, self.start_point)
         cycles_rttp = [((item[0], item[-1]), ((self.sum_rt(item, include_start_node=True, include_end_node=False,
                                                           include_first_edge_delay=False, include_last_edge_delay=True) +
                                                self.edge_delay[(item[-1], item[0])]), self.get_tp(self.simple_dag, item)))

@@ -10,7 +10,7 @@ from tqdm import tqdm
 from typing import Dict, List, Union
 from queue import PriorityQueue
 
-from optiserve.modeling.application_performance_modeling import ApplicationPerformanceModeling
+from optiserve.modeling.application_model import ApplicationPerformanceModeling
 
 warnings.filterwarnings("ignore")
 

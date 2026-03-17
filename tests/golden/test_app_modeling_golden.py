@@ -9,7 +9,7 @@ the modeling / graph-reduction code.
 import json
 from pathlib import Path
 
-from optiserve.modeling.application_performance_modeling import (
+from optiserve.modeling.application_model import (
     ApplicationPerformanceModeling,
 )
 
