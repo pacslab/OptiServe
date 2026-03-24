@@ -1,0 +1,182 @@
+{
+  "acyclic:BAPB:ertc": {
+    "accuracy": 0.6667,
+    "cost": 6.0125,
+    "iterations": 3,
+    "mem": {
+      "1": 128,
+      "2": 512
+    },
+    "model": {
+      "1": 0,
+      "2": 2
+    },
+    "rt": 1716.8
+  },
+  "acyclic:BCPA:max": {
+    "accuracy": 0.5,
+    "cost": 2.3775,
+    "iterations": 4,
+    "mem": {
+      "1": 128,
+      "2": 128
+    },
+    "model": {
+      "1": 1,
+      "2": 0
+    },
+    "rt": 1580.8
+  },
+  "acyclic:BCPA:none": {
+    "accuracy": 0.5,
+    "cost": 2.3775,
+    "iterations": 4,
+    "mem": {
+      "1": 128,
+      "2": 128
+    },
+    "model": {
+      "1": 1,
+      "2": 0
+    },
+    "rt": 1580.8
+  },
+  "acyclic:BPBA:max": {
+    "accuracy": 0.5,
+    "cost": 10.1225,
+    "iterations": 3,
+    "mem": {
+      "1": 1024,
+      "2": 128
+    },
+    "model": {
+      "1": 1,
+      "2": 0
+    },
+    "rt": 1491.2
+  },
+  "acyclic:BPBA:none": {
+    "accuracy": 0.5,
+    "cost": 10.1225,
+    "iterations": 3,
+    "mem": {
+      "1": 1024,
+      "2": 128
+    },
+    "model": {
+      "1": 1,
+      "2": 0
+    },
+    "rt": 1491.2
+  },
+  "acyclic:BPBA:rtm": {
+    "accuracy": 0.5,
+    "cost": 10.1225,
+    "iterations": 3,
+    "mem": {
+      "1": 1024,
+      "2": 128
+    },
+    "model": {
+      "1": 1,
+      "2": 0
+    },
+    "rt": 1491.2
+  },
+  "cyclic:BAPB:ertc": {
+    "accuracy": 0.6667,
+    "cost": 11.3098,
+    "iterations": 3,
+    "mem": {
+      "1": 128,
+      "2": 512,
+      "3": 256
+    },
+    "model": {
+      "1": 0,
+      "2": 1,
+      "3": 2
+    },
+    "rt": 3548.2857
+  },
+  "cyclic:BCPA:max": {
+    "accuracy": 0.5556,
+    "cost": 5.0114,
+    "iterations": 6,
+    "mem": {
+      "1": 128,
+      "2": 128,
+      "3": 128
+    },
+    "model": {
+      "1": 0,
+      "2": 0,
+      "3": 2
+    },
+    "rt": 3350.5714
+  },
+  "cyclic:BCPA:none": {
+    "accuracy": 0.5556,
+    "cost": 5.0114,
+    "iterations": 6,
+    "mem": {
+      "1": 128,
+      "2": 128,
+      "3": 128
+    },
+    "model": {
+      "1": 0,
+      "2": 0,
+      "3": 2
+    },
+    "rt": 3350.5714
+  },
+  "cyclic:BPBA:max": {
+    "accuracy": 0.5556,
+    "cost": 22.0982,
+    "iterations": 4,
+    "mem": {
+      "1": 128,
+      "2": 1024,
+      "3": 1024
+    },
+    "model": {
+      "1": 0,
+      "2": 0,
+      "3": 2
+    },
+    "rt": 3118.5714
+  },
+  "cyclic:BPBA:none": {
+    "accuracy": 0.5556,
+    "cost": 22.0982,
+    "iterations": 4,
+    "mem": {
+      "1": 128,
+      "2": 1024,
+      "3": 1024
+    },
+    "model": {
+      "1": 0,
+      "2": 0,
+      "3": 2
+    },
+    "rt": 3118.5714
+  },
+  "cyclic:BPBA:rtm": {
+    "accuracy": 0.5556,
+    "cost": 22.0982,
+    "iterations": 4,
+    "mem": {
+      "1": 128,
+      "2": 1024,
+      "3": 1024
+    },
+    "model": {
+      "1": 0,
+      "2": 0,
+      "3": 2
+    },
+    "rt": 3118.5714
+  }
+}

@@ -1,42 +1,66 @@
+import copy
 import itertools
-import warnings
+from typing import Dict, List
+
 import networkx as nx
 import numpy as np
 import pandas as pd
-import random
-import copy
-
 from tqdm import tqdm
-from typing import Dict, List, Union
-from queue import PriorityQueue
 
+from optiserve.logging import get_logger
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
+from optiserve.optimization.accuracy import AccuracyModel
+from optiserve.optimization.result import OptimizationResult
 
-warnings.filterwarnings("ignore")
+logger = get_logger(__name__)
 
 
 class ApplicationOptimizer:
+    """Greedy Probability-Refined-Critical-Path (PRCP) optimizer over a workflow.
+
+    Three strategies jointly choose a per-function memory size and ML-model
+    variant under two constraints while optimizing the third objective:
+
+    - ``BPBA`` / :pyattr:`BPBC` — minimize response time under budget + accuracy.
+    - ``BCPA`` / :pyattr:`BCPC` — minimize cost under response-time + accuracy.
+    - ``BAPB``                  — maximize accuracy under response-time + budget.
+
+    Each returns an :class:`~optiserve.optimization.result.OptimizationResult`
+    (a tuple-compatible NamedTuple). Per-variant accuracy comes from
+    :class:`~optiserve.optimization.accuracy.AccuracyModel` (measured values when
+    a node carries them, else a normalized rank).
+
+    Note: the greedy candidate-selection blocks in the three strategies are
+    intentionally left un-merged. Their lexicographic tie-breaking — including
+    the exact first-vs-last behavior when two configurations produce identical
+    metric tuples — is load-bearing for reproducibility of the published
+    experiments, so they are preserved verbatim rather than factored into a
+    single helper that could subtly change tie resolution.
+    """
+
     def __init__(self,
                  Appworkflow: ApplicationPerformanceModeling,
-                 mem_list: Dict[str, List],
-                 model_list: Dict[str, List]):
+                 mem_list: Dict[str, List] = None,
+                 model_list: Dict[str, List] = None):
 
         self.App = Appworkflow
-        
-        self.mem_list = mem_list
-        self.model_list = model_list
-        
-        # Normalized accuracy of each model for each function
-        self.model_accuracy_list = {}
-        
-        for node in self.App.workflow_graph.nodes:
-            if node in ['Start', 'End']:
-                continue
-            
-            models_variants = self.App.workflow_graph.nodes[node]['models_list']
-            
-            self.model_accuracy_list[node] = [i / len(models_variants) for i in range(1, len(models_variants) + 1)]    
-        
+
+        # Retained for backward compatibility; not used by the optimizer.
+        self.mem_list = mem_list or {}
+        self.model_list = model_list or {}
+
+        # Per-node, per-variant accuracy: measured values when a node provides an
+        # 'accuracy_list', otherwise a normalized rank i/N. `model_accuracy_list`
+        # keeps the old [node][variant_index] shape used throughout this class.
+        node_list = [n for n in self.App.workflow_graph.nodes
+                     if n not in ('Start', 'End')]
+        self.accuracy_model = AccuracyModel.from_graph(
+            self.App.workflow_graph, node_list
+        )
+        self.model_accuracy_list = {
+            node: self.accuracy_model.variant_accuracies(node) for node in node_list
+        }
+
         self.minimal_mem_configuration, \
             self.maximal_mem_configuration, \
                 self.minimal_model_configuration, \
@@ -90,7 +114,11 @@ class ApplicationOptimizer:
         if end_iterations is not None:
             task_size = end_iterations - start_iterations + 1
         else:
-            task_size = np.prod([len(item) for item in all_available_mem_list], [len(item) for item in all_available_model_list]) - start_iterations + 1
+            task_size = (
+                np.prod([len(item) for item in all_available_mem_list])
+                * np.prod([len(item) for item in all_available_model_list])
+                - start_iterations + 1
+            )
 
         model_configurations = list(itertools.product(*all_available_model_list))
         mem_configurations = list(itertools.product(*all_available_mem_list))
@@ -98,7 +126,7 @@ class ApplicationOptimizer:
         total_configurations = itertools.product(model_configurations, mem_configurations)
 
         iterations_count = start_iterations - 1
-        print('Get Performance Cost Table - Task Size: {}'.format(task_size))
+        logger.debug('Get Performance Cost Table - Task Size: {}'.format(task_size))
         
         for i in range(start_iterations - 1):
             next(total_configurations)
@@ -178,15 +206,15 @@ class ApplicationOptimizer:
         self.App.get_simple_dag()
         maximal_avg_rt = self.App.get_avg_rt()
 
-        print('Minimal Memory Configuration: {}'.format(minimal_mem_configuration))
-        print('Maximal Memory Configuration: {}'.format(maximal_mem_configuration))
-        print('Maximal Model Configuration: {}'.format(maximal_model_configuration))
-        print('Minimal Model Configuration: {}'.format(minimal_model_configuration))
-        print('Maximal Cost: {}'.format(maximal_cost))
-        print('Minimal Average Response Time: {}'.format(minimal_avg_rt))
-        print('Minimal Cost: {}'.format(minimal_cost))
-        print('Maximal Average Response Time: {}'.format(maximal_avg_rt))
-        print('Optimization Boundary Calculation Completed.')
+        logger.debug('Minimal Memory Configuration: {}'.format(minimal_mem_configuration))
+        logger.debug('Maximal Memory Configuration: {}'.format(maximal_mem_configuration))
+        logger.debug('Maximal Model Configuration: {}'.format(maximal_model_configuration))
+        logger.debug('Minimal Model Configuration: {}'.format(minimal_model_configuration))
+        logger.debug('Maximal Cost: {}'.format(maximal_cost))
+        logger.debug('Minimal Average Response Time: {}'.format(minimal_avg_rt))
+        logger.debug('Minimal Cost: {}'.format(minimal_cost))
+        logger.debug('Maximal Average Response Time: {}'.format(maximal_avg_rt))
+        logger.debug('Optimization Boundary Calculation Completed.')
         
         return (minimal_mem_configuration, maximal_mem_configuration, minimal_model_configuration, maximal_model_configuration, maximal_cost, minimal_avg_rt, minimal_cost,
                 maximal_avg_rt)
@@ -385,8 +413,6 @@ class ApplicationOptimizer:
                 curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
                 surplus -= min_cost_increase_under_MAX_BCR
                 
-                print(min_avg_cost_increase_of_each_node)
-                print(self.accuracy_is_satisfied(curr_model_configuration, accuracy_constraint, accuracy_formula), surplus, '\n\n')
 
         order = 0
         
@@ -495,12 +521,12 @@ class ApplicationOptimizer:
         current_mem_configuration = nx.get_node_attributes(self.App.workflow_graph, 'mem')
         del current_mem_configuration['Start']
         del current_mem_configuration['End']
-        print('Optimized Memory Configuration: {}'.format(current_mem_configuration))
-        print('Average end-to-end response time: {}'.format(current_avg_rt))
-        print('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
-        print('Average Cost: {}'.format(current_cost))
-        print('PRCP_BPBC Optimization Completed.\n\n')
-        return (current_avg_rt, current_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
+        logger.debug('Optimized Memory Configuration: {}'.format(current_mem_configuration))
+        logger.debug('Average end-to-end response time: {}'.format(current_avg_rt))
+        logger.debug('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
+        logger.debug('Average Cost: {}'.format(current_cost))
+        logger.debug('BPBC optimization completed.')
+        return OptimizationResult(current_avg_rt, current_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
 
 
     def BCPA(self, rt_constraint, accuracy_constraint, accuracy_formula, optimize_model_configuration=True, BCR=False, BCRtype="RT/M", BCRthreshold=0.2):
@@ -545,10 +571,10 @@ class ApplicationOptimizer:
         ml_functions = [node for node in self.App.workflow_graph.nodes if node not in ['Start', 'End'] and len(self.model_accuracy_list[node]) > 1]
         mem_list = nx.get_node_attributes(self.App.workflow_graph, 'mem') 
         
-        print('RT Constraint: {}'.format(rt_constraint))
-        print('Accuracy Constraint: {}'.format(accuracy_constraint))
-        print('Performance Surplus: {}'.format(performance_surplus))
-        print('Current Average Response Time: {}'.format(current_avg_rt))
+        logger.debug('RT Constraint: {}'.format(rt_constraint))
+        logger.debug('Accuracy Constraint: {}'.format(accuracy_constraint))
+        logger.debug('Performance Surplus: {}'.format(performance_surplus))
+        logger.debug('Current Average Response Time: {}'.format(current_avg_rt))
         w = 100
 
         if optimize_model_configuration:
@@ -571,7 +597,6 @@ class ApplicationOptimizer:
                         increased_rt = self.App.get_avg_rt() - current_avg_rt
                         acc_after = self.compute_accuracy(curr_model_configuration, accuracy_formula)
                         
-                        print(node, increased_rt, performance_surplus, curr_model_configuration)
                         if (increased_rt <= performance_surplus):
                             acc_gap = acc_after - accuracy_constraint
                             score = -increased_rt + w * min(acc_gap, 0.0)
@@ -629,8 +654,6 @@ class ApplicationOptimizer:
                 curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
                 performance_surplus = performance_surplus - min_rt_increase_under_MAX_BCR
                 
-                print(min_avg_rt_increase_of_each_node)
-                print(self.accuracy_is_satisfied(curr_model_configuration, accuracy_constraint, accuracy_formula), performance_surplus, '\n\n')
 
         
         current_cost = self.App.get_avg_cost()
@@ -738,12 +761,12 @@ class ApplicationOptimizer:
         current_mem_configuration = nx.get_node_attributes(self.App.workflow_graph, 'mem')
         del current_mem_configuration['Start']
         del current_mem_configuration['End']
-        print('Optimized Memory Configuration: {}'.format(current_mem_configuration))
-        print('Average end-to-end response time: {}'.format(current_avg_rt))
-        print('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
-        print('Average Cost: {}'.format(current_cost))
-        print('PRCPG_BCPC Optimization Completed.')
-        return (current_avg_rt, current_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
+        logger.debug('Optimized Memory Configuration: {}'.format(current_mem_configuration))
+        logger.debug('Average end-to-end response time: {}'.format(current_avg_rt))
+        logger.debug('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
+        logger.debug('Average Cost: {}'.format(current_cost))
+        logger.debug('BCPC optimization completed.')
+        return OptimizationResult(current_avg_rt, current_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
 
     
     def BAPB(self, rt_constraint, budget, accuracy_formula, BCR=False, BCRtype="RT/M", BCRthreshold=0.1):
@@ -853,7 +876,7 @@ class ApplicationOptimizer:
             curr_mem_configuration[target_node] = target_mem
             curr_model_configuration[target_node] = target_model
             
-            print('Target Node: {}, Target Mem: {}, Target Model: {}'.format(target_node, target_mem, target_model))
+            logger.debug('Target Node: {}, Target Mem: {}, Target Model: {}'.format(target_node, target_mem, target_model))
             
             self.update_App_workflow_mem_rt(self.App, mem_dict={target_node: target_mem}, model_dict={target_node: target_model})
             max_accuracy_increase = max_acc_increase_of_each_node[target_node][1]
@@ -870,12 +893,12 @@ class ApplicationOptimizer:
         current_mem_configuration = nx.get_node_attributes(self.App.workflow_graph, 'mem')
         del current_mem_configuration['Start']
         del current_mem_configuration['End']
-        print('Optimized Memory Configuration: {}'.format(current_mem_configuration))
-        print('Average end-to-end response time: {}'.format(current_avg_rt))
-        print('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
-        print('Average Cost: {}'.format(current_avg_cost))
-        print('PRCPG_BAPB Optimization Completed.')
-        return (current_avg_rt, current_avg_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
+        logger.debug('Optimized Memory Configuration: {}'.format(current_mem_configuration))
+        logger.debug('Average end-to-end response time: {}'.format(current_avg_rt))
+        logger.debug('Optimized Accuracy Configuration: {}'.format(curr_model_configuration))
+        logger.debug('Average Cost: {}'.format(current_avg_cost))
+        logger.debug('BAPB optimization completed.')
+        return OptimizationResult(current_avg_rt, current_avg_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
             
             
 
@@ -883,14 +906,6 @@ class ApplicationOptimizer:
         '''
         Get the Optimization Curve and save as csv.
         '''
-                
-        # random.seed(42)  # For reproducibility
-        # budget_list_copy = random.sample(budget_list, k=len(budget_list))
-        # random.seed(24)  # For reproducibility
-        # accuracy_constraint_list_copy = random.sample(accuracy_constraint_list, k=len(accuracy_constraint_list))
-        # random.seed(42)  # For reproducibility
-        # performance_constraint_list_copy = random.sample(performance_constraint_list, k=len(performance_constraint_list))
-        
         budget_list_copy = budget_list
         accuracy_constraint_list_copy = accuracy_constraint_list
         performance_constraint_list_copy = performance_constraint_list
@@ -1019,3 +1034,11 @@ class ApplicationOptimizer:
              'BCR_disabled_Acc_Config', 'BCR_disabled_Acc_Score', 'BCR_disabled_Iterations', 'BCR_threshold']
         ]
         BAPB_data.to_csv(filenameprefix + '_BAPB.csv', index=False)
+
+
+# Canonical strategy names (matching the paper / artifact suffixes). The method
+# definitions above keep their historical names; these aliases are the preferred
+# spelling: BPBC = best performance under budget + accuracy, BCPC = best cost
+# under performance + accuracy, BAPB = best accuracy under performance + budget.
+ApplicationOptimizer.BPBC = ApplicationOptimizer.BPBA
+ApplicationOptimizer.BCPC = ApplicationOptimizer.BCPA

@@ -1,7 +1,7 @@
 import multiprocessing as mp
 
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
-from optiserve.optimizer.application_optimizer import ApplicationOptimizer
+from optiserve.optimization.application_optimizer import ApplicationOptimizer
 
 def pct_work(app_g, filename, start_iterations, end_iterations, mem_list, model_list):
     app = ApplicationPerformanceModeling(graph=app_g.copy())
