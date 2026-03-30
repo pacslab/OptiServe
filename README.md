@@ -21,6 +21,45 @@ Serverless computing simplifies deployment, but makes it harder to tune performa
 - **Performance modeling** through lightweight profiling.
 - **Search space reduction** using critical paths and benefit-cost heuristics.
 - **Support for workflows with branching, parallelism, cycles, and self-loops.**
+- **Offline-testable core** — the modeling and optimization layers have no AWS or
+  filesystem dependency; only live profiling touches AWS.
+
+## 🚀 Quickstart
+
+Build a workflow, model it, and optimize it — no AWS needed (synthetic models and
+injected pricing):
+
+```python
+from optiserve import WorkflowGraph, ModelVariant, ApplicationPerformanceModeling, ApplicationOptimizer
+
+grid = [128, 256, 512, 1024, 2048]
+f1 = [ModelVariant("small", lambda m: 900 - 0.1*m, accuracy=0.70),
+      ModelVariant("large", lambda m: 1400 - 0.1*m, accuracy=0.95)]
+f2 = [ModelVariant("fast", lambda m: 600 - 0.05*m, accuracy=0.60),
+      ModelVariant("accurate", lambda m: 950 - 0.05*m, accuracy=0.92)]
+
+workflow = (WorkflowGraph()
+    .add_ml_function(1, f1, grid)
+    .add_ml_function(2, f2, grid)
+    .add_edges([("Start", 1, 1.0), (1, 2, 1.0), (2, "End", 1.0)])
+    .validate())
+
+app = ApplicationPerformanceModeling(workflow.to_networkx(), delay_type="SFN")
+app.cost_calculator.aws_pricing_units = {"compute": 1.6667e-5, "request": 2e-7}  # or fetched from AWS
+
+opt = ApplicationOptimizer(app)
+result = opt.BPBC(budget=opt.maximal_cost, accuracy_constraint=0.75,
+                  accuracy_formula=lambda a, b: (a + b) / 2)
+print(result.response_time_ms, result.cost, result.memory_config, result.model_config)
+```
+
+The full runnable version is [`examples/optimize_workflow.py`](./examples/optimize_workflow.py).
+
+## 📚 Documentation
+
+- [Architecture](./docs/architecture.md) — layered design, dependency graph, data flow.
+- [Developer guide](./docs/developer_guide.md) — setup, tests, extending OptiServe.
+- [`experiments/`](./experiments) — notebooks demonstrating the end-to-end research workflow.
 
 ## 🛠 How to install?
 
@@ -63,4 +102,20 @@ conda activate optiserve
 
 ## ▶️ How to use?
 
-To see how OptiServe works and how to apply it to your own workflows, please check the Jupyter notebooks in the [`experiments`](./experiments) directory.
+- **As a library** — see the Quickstart above and [`examples/`](./examples).
+- **Reproducing the experiments** — the Jupyter notebooks in
+  [`experiments/`](./experiments) demonstrate profiling, modeling, optimization,
+  and the evaluation figures.
+- **Tests** — `pytest -q` runs the offline suite, including golden-master
+  regressions that lock the analytical core.
+
+## 🗂 Project layout
+
+```
+optiserve/      the framework (aws, cost, profiling, modeling, workflow,
+                optimization, evaluation, datasets, visualization)
+experiments/    benchmark functions + evaluation notebooks
+examples/       runnable usage examples
+docs/           architecture and developer documentation
+tests/          unit + golden-master regression tests
+```
