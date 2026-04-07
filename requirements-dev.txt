@@ -1,0 +1,15 @@
+# Development / CI dependencies.
+# Mirrors pyproject.toml's [project.optional-dependencies].dev; CI asserts the
+# two stay in sync (see .github/workflows/ci.yml :: deps-in-sync).
+-r requirements.txt
+pytest==8.3.3
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+# [server]: the integration suite runs against BOTH an in-process mock and a
+# real moto server over HTTP (see tests/integration/conftest.py). Only the
+# server path exercises the AWS_ENDPOINT_URL seam OptiServe actually ships.
+moto[server]==5.0.28
+ruff==0.8.4
+mypy==1.13.0
+build==1.2.2.post1
+pyyaml==6.0.2

@@ -11,8 +11,25 @@ requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "Arian Boukani", email = "boukani.arian@gmail.com" }]
 keywords = ["serverless", "aws-lambda", "optimization", "performance-modeling", "mlsys"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Distributed Computing",
+]
 
 # Core runtime dependencies (the library itself — no notebook/experiment deps).
+#
+# These are pinned exactly, on purpose. OptiServe's golden-master suite asserts
+# byte-identical CSV output from the evaluation drivers and 6-decimal equality
+# on the analytical model, so a float-repr or lstsq change in numpy/scipy/pandas
+# is a *behavioural* change for this package, not a transparent upgrade. The
+# pins are the reproducibility contract for the published results; `requirements
+# .txt` mirrors them as the CI lockfile. Bump them deliberately, with the golden
+# baselines regenerated and reviewed in the same commit.
 dependencies = [
     "networkx==3.3",
     "numpy==1.26.4",
@@ -34,16 +51,155 @@ experiments = [
     "ipykernel",
 ]
 dev = [
-    "pytest>=8",
+    "pytest==8.3.3",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "moto[server]==5.0.28",
+    "ruff==0.8.4",
+    "mypy==1.13.0",
+    "build==1.2.2.post1",
+    "pyyaml==6.0.2",
 ]
 
+[project.scripts]
+optiserve = "optiserve.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/pacslab/optiserve"
-Repository = "https://github.com/pacslab/optiserve"
+Homepage = "https://github.com/2arian3/OptiServe"
+Repository = "https://github.com/2arian3/OptiServe"
+Issues = "https://github.com/2arian3/OptiServe/issues"
 
 [tool.setuptools.packages.find]
 include = ["optiserve*"]
 exclude = ["tests*", "experiments*", "docs*"]
 
+[tool.setuptools.package-data]
+optiserve = ["py.typed"]
+
+# --------------------------------------------------------------------------- #
+# pytest
+# --------------------------------------------------------------------------- #
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers --strict-config -ra"
+markers = [
+    "integration: exercises the aws/ adapters against a mocked AWS control plane (moto)",
+    "golden: golden-master regression that locks published numerical results",
+    "slow: takes more than a couple of seconds",
+]
+filterwarnings = [
+    "error::DeprecationWarning:optiserve.*",
+]
+
+# --------------------------------------------------------------------------- #
+# coverage
+# --------------------------------------------------------------------------- #
+[tool.coverage.run]
+source = ["optiserve"]
+branch = true
+omit = [
+    "optiserve/visualization/*",  # matplotlib rendering, exercised by eye
+    "optiserve/utils/pct_work.py",  # multiprocessing entry point
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+]
+
+# --------------------------------------------------------------------------- #
+# ruff
+# --------------------------------------------------------------------------- #
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["experiments", "docs"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "T20",  # flake8-print — the library logs, it does not print
+    "RUF",
+]
+ignore = [
+    "E501",    # line length is enforced by the formatter, not the linter
+    "B008",    # function call in default arg — used deliberately for factories
+    "SIM108",  # ternary-vs-if is a readability call, not a rule
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The analytical core, the greedy optimizer and the experiment drivers are
+# frozen against golden baselines. Their `type(x) == list` dispatch, `== False`
+# sentinel comparisons and unstrict `zip`s are load-bearing for the published
+# numbers, and a "cleanup" that changes one is a silent result change. They are
+# exempted from stylistic rules — never from pyflakes (F), which catches real
+# defects like undefined names.
+"optiserve/modeling/application_model.py" = ["E7", "E741", "SIM", "B", "UP", "C4", "RUF"]
+"optiserve/optimization/application_optimizer.py" = ["E7", "E741", "SIM", "B", "UP", "C4", "RUF"]
+"optiserve/evaluation/experiments.py" = ["E7", "SIM", "B", "UP", "C4", "RUF"]
+"examples/*" = ["T20"]
+"scripts/*" = ["T20"]
+"tests/*" = ["T20", "RUF059"]
+
+[tool.ruff.format]
+# The frozen files are excluded from the *formatter* as well: reflowing 1 200
+# lines of golden-locked code makes every future diff on them unreviewable, and
+# reviewability is the only defence those files have.
+exclude = [
+    "optiserve/modeling/application_model.py",
+    "optiserve/optimization/application_optimizer.py",
+    "optiserve/evaluation/experiments.py",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["optiserve"]
+
+# --------------------------------------------------------------------------- #
+# mypy
+# --------------------------------------------------------------------------- #
+[tool.mypy]
+python_version = "3.11"
+files = ["optiserve"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+# The typed layers — new or fully refactored code is held to a stricter bar.
+[[tool.mypy.overrides]]
+module = [
+    "optiserve.aws.*",
+    "optiserve.config",
+    "optiserve.exceptions",
+    "optiserve.logging",
+    "optiserve.observability.*",
+    "optiserve.profiling.*",
+    "optiserve.workflow.*",
+    "optiserve.optimization.accuracy",
+    "optiserve.optimization.result",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# The frozen analytical core predates typing and is locked by golden tests;
+# annotating it is tracked separately from this refactor.
+[[tool.mypy.overrides]]
+module = [
+    "optiserve.modeling.application_model",
+    "optiserve.optimization.application_optimizer",
+    "optiserve.evaluation.experiments",
+]
+ignore_errors = true
