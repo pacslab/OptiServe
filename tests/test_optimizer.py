@@ -2,6 +2,7 @@
 
 (Full behavior is locked by tests/golden/test_optimizer_golden.py.)
 """
+
 import contextlib
 import io
 

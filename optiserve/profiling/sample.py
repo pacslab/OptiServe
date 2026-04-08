@@ -1,9 +1,9 @@
 """Value objects for profiling data: a single :class:`Sample` and an
 :class:`Exploration` container of samples for one function/model."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Union
 
 import numpy as np
 
@@ -24,8 +24,8 @@ class Exploration:
     lives in :mod:`optiserve.cost`).
     """
 
-    def __init__(self, samples: Optional[List[Sample]] = None):
-        self._samples: List[Sample] = list(samples) if samples else []
+    def __init__(self, samples: list[Sample] | None = None):
+        self._samples: list[Sample] = list(samples) if samples else []
 
     @property
     def memories(self) -> np.ndarray:
@@ -39,7 +39,7 @@ class Exploration:
     def costs(self) -> np.ndarray:
         return self.durations * self.memories
 
-    def add_sample(self, sample: Union[Sample, List[Sample]]) -> None:
+    def add_sample(self, sample: Sample | list[Sample]) -> None:
         if isinstance(sample, Sample):
             self._samples.append(sample)
         elif isinstance(sample, list):

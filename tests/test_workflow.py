@@ -1,4 +1,5 @@
 """Tests for the workflow builder, validator, and the model->profile bridge."""
+
 import pytest
 
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
@@ -13,9 +14,19 @@ def test_builder_round_trips_to_the_golden_app():
     for n in range(1, 7):
         wg.add_function(n, mem[n], rt[n])
     wg.add_edges(
-        [("Start", 1, 1.0), (1, 2, 0.2), (1, 3, 0.8), (1, 4, 1.0),
-         (2, 5, 1.0), (3, 5, 1.0), (4, 5, 1.0), (5, 6, 0.7),
-         (6, 6, 0.2), (6, "End", 0.8), (5, 1, 0.3)]
+        [
+            ("Start", 1, 1.0),
+            (1, 2, 0.2),
+            (1, 3, 0.8),
+            (1, 4, 1.0),
+            (2, 5, 1.0),
+            (3, 5, 1.0),
+            (4, 5, 1.0),
+            (5, 6, 0.7),
+            (6, 6, 0.2),
+            (6, "End", 0.8),
+            (5, 1, 0.3),
+        ]
     )
     wg.validate()
 

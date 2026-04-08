@@ -4,9 +4,8 @@ Computes the cost of an invocation from GB-second compute pricing plus a
 per-request fee, using unit prices fetched (lazily, then cached) from the AWS
 Price List API via :class:`~optiserve.aws.pricing_client.PricingClient`.
 """
-from __future__ import annotations
 
-from typing import Optional, Union
+from __future__ import annotations
 
 import numpy as np
 
@@ -25,12 +24,12 @@ class CostCalculator:
         self,
         region: str = "us-east-1",
         architecture: str = "x86_64",
-        pricing_client: Optional[PricingClient] = None,
+        pricing_client: PricingClient | None = None,
     ):
         self._region = region
         self._architecture = architecture
         self._pricing_client = pricing_client
-        self.aws_pricing_units: Optional[dict] = None
+        self.aws_pricing_units: dict | None = None
 
     def _units(self) -> dict:
         if self.aws_pricing_units is None:
@@ -43,9 +42,9 @@ class CostCalculator:
     def calculate_cost(
         self,
         memory_mb: int,
-        duration_ms: Union[float, np.ndarray],
+        duration_ms: float | np.ndarray,
         calculate_invocation_cost: bool = True,
-    ) -> Union[float, np.ndarray]:
+    ) -> float | np.ndarray:
         units = self._units()
         memory_gb = memory_mb / 1024.0
         duration_s = np.ceil(duration_ms) / 1000.0

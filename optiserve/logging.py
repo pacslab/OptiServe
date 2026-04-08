@@ -9,6 +9,7 @@ logger or emits output. Applications opt in to output via
 Modules should obtain a namespaced logger with ``get_logger(__name__)`` so log
 records are attributable to their source module.
 """
+
 from __future__ import annotations
 
 import logging

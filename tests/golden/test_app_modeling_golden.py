@@ -6,18 +6,17 @@ experiments/application_modeling.ipynb. These values are published in the
 notebook (rt = 1739.2857..., see ne dict) and must survive every refactor of
 the modeling / graph-reduction code.
 """
+
 import json
 from pathlib import Path
+
+from _app_modeling_case import compute
 
 from optiserve.modeling.application_model import (
     ApplicationPerformanceModeling,
 )
 
-from _app_modeling_case import compute
-
-BASELINE = json.loads(
-    (Path(__file__).parent / "app_modeling_baseline.json").read_text()
-)
+BASELINE = json.loads((Path(__file__).parent / "app_modeling_baseline.json").read_text())
 
 
 def test_app_modeling_matches_baseline():

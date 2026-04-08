@@ -1,4 +1,5 @@
 """Tests for the parametric performance model (fit / minimize / persistence)."""
+
 from pathlib import Path
 
 import numpy as np
@@ -12,8 +13,7 @@ from optiserve.profiling.sample import Exploration, Sample
 def _synthetic_exploration(a0=100.0, a1=4000.0, a2=500.0):
     memories = np.arange(128, 3009, 128)
     samples = [
-        Sample(memory_mb=int(m), duration_ms=float(model_function(m, a0, a1, a2)))
-        for m in memories
+        Sample(memory_mb=int(m), duration_ms=float(model_function(m, a0, a1, a2))) for m in memories
     ]
     return Exploration(samples)
 

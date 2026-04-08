@@ -1,4 +1,5 @@
 """Unit tests for the aws/ adapter layer and cost model (no live AWS)."""
+
 from unittest.mock import Mock
 
 import numpy as np
@@ -9,7 +10,6 @@ from optiserve.aws.logs_client import AWSFunctionLogs
 from optiserve.aws.pricing_client import PricingClient
 from optiserve.cost import CostCalculator
 from optiserve.exceptions import FunctionTimeout, NotEnoughMemory
-
 
 # --------------------------------------------------------------------------- #
 # LogParser

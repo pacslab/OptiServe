@@ -1,6 +1,7 @@
 """Golden-master regression for the application optimizer — locks the greedy
 strategies / BCR variants across acyclic and cyclic graphs so the Stage-7
 refactor is provably behavior-preserving."""
+
 import json
 from pathlib import Path
 

@@ -12,9 +12,8 @@ a2: 2*a1 + a2``); ``acc_value_columns`` are the ground-truth columns holding eac
 function's per-variant accuracy value (e.g. ``['f1_acc_value', 'f2_acc_value',
 'f3_acc_value']``).
 """
-from __future__ import annotations
 
-from typing import List
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
@@ -28,7 +27,10 @@ def _config_accuracy(ground_truth: pd.DataFrame, formula, acc_value_columns) -> 
 
 
 def bpbc_optimization_accuracy(
-    opt_curve: pd.DataFrame, ground_truth: pd.DataFrame, accuracy_formula, acc_value_columns: List[str]
+    opt_curve: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    accuracy_formula,
+    acc_value_columns: list[str],
 ) -> np.ndarray:
     """Best-Performance-under-Budget-and-aCcuracy: greedy min-RT vs brute-force
     min-RT among accuracy- and budget-feasible configurations."""
@@ -38,16 +40,19 @@ def bpbc_optimization_accuracy(
 
     accuracy = _config_accuracy(ground_truth, accuracy_formula, acc_value_columns)
     best_rt = []
-    for budget, required in zip(df["Budget"], df["Accuracy_Constraint"]):
+    for budget, required in zip(df["Budget"], df["Accuracy_Constraint"], strict=True):
         feasible = ground_truth[(accuracy >= required) & (ground_truth["Cost"] <= budget)]
         best_rt.append(feasible["RT"].min() if not feasible.empty else np.nan)
-    best_rt = np.array(best_rt, dtype=float)
+    best_rt_array = np.array(best_rt, dtype=float)
     best_answer = df["Best_Answer_RT"].to_numpy(dtype=float)
-    return 100 - ((best_answer - best_rt) / best_answer) * 100
+    return 100 - ((best_answer - best_rt_array) / best_answer) * 100
 
 
 def bcpc_optimization_accuracy(
-    opt_curve: pd.DataFrame, ground_truth: pd.DataFrame, accuracy_formula, acc_value_columns: List[str]
+    opt_curve: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    accuracy_formula,
+    acc_value_columns: list[str],
 ) -> np.ndarray:
     """Best-Cost-under-Performance-and-aCcuracy: greedy min-cost vs brute-force
     min-cost among accuracy- and latency-feasible configurations."""
@@ -57,16 +62,21 @@ def bcpc_optimization_accuracy(
 
     accuracy = _config_accuracy(ground_truth, accuracy_formula, acc_value_columns)
     best_cost = []
-    for perf_constraint, required in zip(df["Performance_Constraint"], df["Accuracy_Constraint"]):
+    for perf_constraint, required in zip(
+        df["Performance_Constraint"], df["Accuracy_Constraint"], strict=True
+    ):
         feasible = ground_truth[(accuracy >= required) & (ground_truth["RT"] <= perf_constraint)]
         best_cost.append(feasible["Cost"].min() if not feasible.empty else np.nan)
-    best_cost = np.array(best_cost, dtype=float)
+    best_cost_array = np.array(best_cost, dtype=float)
     best_answer = df["Best_Answer_Cost"].to_numpy(dtype=float)
-    return 100 - ((best_answer - best_cost) / best_answer) * 100
+    return 100 - ((best_answer - best_cost_array) / best_answer) * 100
 
 
 def bapb_optimization_accuracy(
-    opt_curve: pd.DataFrame, ground_truth: pd.DataFrame, accuracy_formula, acc_value_columns: List[str]
+    opt_curve: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    accuracy_formula,
+    acc_value_columns: list[str],
 ) -> np.ndarray:
     """Best-Accuracy-under-Performance-and-Budget: greedy max-accuracy vs
     brute-force max-accuracy among latency- and budget-feasible configurations."""
@@ -79,11 +89,11 @@ def bapb_optimization_accuracy(
 
     accuracy = _config_accuracy(ground_truth, accuracy_formula, acc_value_columns)
     best_accuracy = []
-    for perf_constraint, budget in zip(df["Performance_Constraint"], df["Budget"]):
+    for perf_constraint, budget in zip(df["Performance_Constraint"], df["Budget"], strict=True):
         feasible = ground_truth[
             (ground_truth["Cost"] <= budget) & (ground_truth["RT"] <= perf_constraint)
         ]
         best_accuracy.append(accuracy[feasible.index].max() if not feasible.empty else np.nan)
-    best_accuracy = np.array(best_accuracy, dtype=float)
+    best_accuracy_array = np.array(best_accuracy, dtype=float)
     best_answer = df["Best_Answer_Accuracy"].to_numpy(dtype=float)
-    return 100 - ((best_accuracy - best_answer) / best_answer) * 100
+    return 100 - ((best_accuracy_array - best_answer) / best_answer) * 100

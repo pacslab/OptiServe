@@ -4,6 +4,7 @@ Runs without AWS by using synthetic performance models and injected pricing.
 
     python examples/optimize_workflow.py
 """
+
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
 from optiserve.optimization.application_optimizer import ApplicationOptimizer
 from optiserve.workflow import ModelVariant, WorkflowGraph

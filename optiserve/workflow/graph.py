@@ -15,9 +15,10 @@ Two ways to add a function:
   materialized from each variant's performance model over a memory grid, for
   optimization.
 """
+
 from __future__ import annotations
 
-from typing import Hashable, Iterable, List, Optional
+from collections.abc import Hashable, Iterable
 
 import networkx as nx
 
@@ -28,7 +29,7 @@ class WorkflowGraph:
     START = "Start"
     END = "End"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._graph = nx.DiGraph()
         self._graph.add_node(self.START)
         self._graph.add_node(self.END)
@@ -40,7 +41,7 @@ class WorkflowGraph:
         node_id: Hashable,
         memory_mb: float,
         response_time_ms: float,
-    ) -> "WorkflowGraph":
+    ) -> WorkflowGraph:
         """Add a fixed single-configuration function node."""
         self._graph.add_node(node_id, mem=memory_mb, rt=response_time_ms)
         return self
@@ -48,12 +49,12 @@ class WorkflowGraph:
     def add_ml_function(
         self,
         node_id: Hashable,
-        variants: List[ModelVariant],
+        variants: list[ModelVariant],
         memory_grid: Iterable[int],
         *,
-        initial_memory: Optional[int] = None,
+        initial_memory: int | None = None,
         initial_variant: int = 0,
-    ) -> "WorkflowGraph":
+    ) -> WorkflowGraph:
         """Add a multi-variant function node, materializing its ``perf_profile``
         from each variant's performance model over ``memory_grid`` (the bridge)."""
         node = FunctionNode(node_id, variants, list(memory_grid))
@@ -70,18 +71,18 @@ class WorkflowGraph:
         self._functions[node_id] = node
         return self
 
-    def add_edge(self, u: Hashable, v: Hashable, probability: float) -> "WorkflowGraph":
+    def add_edge(self, u: Hashable, v: Hashable, probability: float) -> WorkflowGraph:
         """Add a directed edge with a transition probability."""
         self._graph.add_weighted_edges_from([(u, v, probability)])
         return self
 
-    def add_edges(self, edges: Iterable[tuple]) -> "WorkflowGraph":
+    def add_edges(self, edges: Iterable[tuple]) -> WorkflowGraph:
         """Add many ``(u, v, probability)`` edges at once."""
         self._graph.add_weighted_edges_from(list(edges))
         return self
 
     # -- validation / export ----------------------------------------------- #
-    def validate(self) -> "WorkflowGraph":
+    def validate(self) -> WorkflowGraph:
         """Check the structural invariants the application model relies on.
 
         Note: out-edge probabilities are intentionally *not* required to sum to
@@ -106,9 +107,7 @@ class WorkflowGraph:
         for u, v, data in g.edges(data=True):
             weight = data.get("weight")
             if weight is None or not (0 < weight <= 1):
-                raise ValueError(
-                    f"Edge {u!r}->{v!r} must have a probability weight in (0, 1]."
-                )
+                raise ValueError(f"Edge {u!r}->{v!r} must have a probability weight in (0, 1].")
         return self
 
     def to_networkx(self) -> nx.DiGraph:

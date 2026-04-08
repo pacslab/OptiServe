@@ -14,6 +14,7 @@ Usage:
     --check   verify every .mdl loads under the CURRENT path (no alias)
     DIR       directory of .mdl files (default: modeled_functions)
 """
+
 from __future__ import annotations
 
 import sys
@@ -39,7 +40,7 @@ def _install_legacy_aliases() -> None:
 
 
 def _remove_legacy_aliases() -> None:
-    for path in _LEGACY_PATHS + ["src.optimizer", "src"]:
+    for path in [*_LEGACY_PATHS, "src.optimizer", "src"]:
         sys.modules.pop(path, None)
 
 
@@ -69,7 +70,7 @@ def check(directory: Path) -> int:
             obj = joblib.load(path)
             assert type(obj).__module__.startswith("optiserve"), type(obj).__module__
             assert getattr(obj.function, "__module__", "").startswith("optiserve")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             failures.append((path.name, repr(exc)))
     if failures:
         print(f"[FAIL] {len(failures)}/{len(files)} .mdl failed:")

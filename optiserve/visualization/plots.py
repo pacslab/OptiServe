@@ -4,9 +4,10 @@ matplotlib is imported lazily so the core library has no hard plotting
 dependency at import time. Each function accepts an optional ``ax`` and returns
 it, so plots compose into larger figures.
 """
+
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 
 def plot_real_vs_modeled_duration(
@@ -70,10 +71,10 @@ def plot_optimization_accuracy(
 
     if ax is None:
         _, ax = plt.subplots()
-    for i, (label, values) in enumerate(accuracy_by_app.items()):
+    for i, (_label, values) in enumerate(accuracy_by_app.items()):
         values = np.asarray(values, dtype=float)
         values = values[~np.isnan(values)]
-        jitter = np.linspace(-0.15, 0.15, len(values)) if len(values) else []
+        jitter = np.linspace(-0.15, 0.15, len(values)) if len(values) else np.zeros(0)
         ax.scatter([i] * len(values) + jitter, values, s=20, alpha=0.7)
     ax.set_xticks(range(len(accuracy_by_app)))
     ax.set_xticklabels(list(accuracy_by_app.keys()))

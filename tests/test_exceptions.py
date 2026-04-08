@@ -1,4 +1,5 @@
 """Regression guard for the consolidated exception hierarchy."""
+
 import pytest
 
 from optiserve.exceptions import (

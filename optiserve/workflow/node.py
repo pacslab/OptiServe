@@ -5,10 +5,11 @@ the experiment notebooks: each function node carries one or more ML-model
 variants, each with a performance model (latency = f(memory)) and an optional
 measured accuracy.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
-from typing import Callable, Dict, Hashable, List, Optional
 
 
 @dataclass
@@ -23,7 +24,7 @@ class ModelVariant:
 
     name: str
     performance_model: Callable[[float], float]
-    accuracy: Optional[float] = None
+    accuracy: float | None = None
 
 
 @dataclass
@@ -32,21 +33,20 @@ class FunctionNode:
     discrete performance profile is materialized."""
 
     node_id: Hashable
-    variants: List[ModelVariant]
-    memory_grid: List[int]
+    variants: list[ModelVariant]
+    memory_grid: list[int]
 
-    def profile_table(self) -> List[Dict[int, float]]:
+    def profile_table(self) -> list[dict[int, float]]:
         """Discrete ``perf_profile``: one ``{memory_mb: latency_ms}`` dict per
         variant, evaluated over the memory grid."""
         return [
-            {int(m): float(v.performance_model(m)) for m in self.memory_grid}
-            for v in self.variants
+            {int(m): float(v.performance_model(m)) for m in self.memory_grid} for v in self.variants
         ]
 
     @property
-    def model_names(self) -> List[str]:
+    def model_names(self) -> list[str]:
         return [v.name for v in self.variants]
 
     @property
-    def accuracies(self) -> List[Optional[float]]:
+    def accuracies(self) -> list[float | None]:
         return [v.accuracy for v in self.variants]

@@ -24,23 +24,22 @@ everything the framework raises with a single ``except OptiServeError``.
     coupling is deliberate; the sampler's ``except NotEnoughMemory`` branch
     relies on it. Keep the relationship if you change this file.
 """
+
 from __future__ import annotations
 
-from typing import Optional
-
 __all__ = [
-    "OptiServeError",
-    "InvocationError",
-    "NotEnoughMemory",
-    "FunctionTimeout",
-    "MaxInvocationAttemptsReached",
-    "SamplingError",
-    "LogParsingError",
-    "NoMemoryLeft",
-    "OptimizationError",
-    "UnfeasibleConstraint",
     "CostCalculationError",
     "FunctionConfigurationError",
+    "FunctionTimeout",
+    "InvocationError",
+    "LogParsingError",
+    "MaxInvocationAttemptsReached",
+    "NoMemoryLeft",
+    "NotEnoughMemory",
+    "OptiServeError",
+    "OptimizationError",
+    "SamplingError",
+    "UnfeasibleConstraint",
 ]
 
 
@@ -59,7 +58,7 @@ class InvocationError(OptiServeError):
     """A Lambda invocation failed. ``duration_ms`` is the billed duration when
     one could be recovered from the logs (otherwise ``None``)."""
 
-    def __init__(self, message: str, duration_ms: Optional[int] = None):
+    def __init__(self, message: str, duration_ms: int | None = None):
         super().__init__(message)
         self.duration_ms = duration_ms
 
@@ -70,7 +69,7 @@ class NotEnoughMemory(InvocationError):
     def __init__(
         self,
         message: str = "Not enough memory configurations to explore.",
-        duration_ms: Optional[int] = None,
+        duration_ms: int | None = None,
     ):
         super().__init__(message, duration_ms)
 
@@ -81,7 +80,7 @@ class FunctionTimeout(NotEnoughMemory):
     def __init__(
         self,
         message: str = "Function timed out; the execution time limit was reached.",
-        duration_ms: Optional[int] = None,
+        duration_ms: int | None = None,
     ):
         super().__init__(message, duration_ms)
 
@@ -92,7 +91,7 @@ class MaxInvocationAttemptsReached(InvocationError):
     def __init__(
         self,
         message: str = "Maximum number of invocation attempts reached.",
-        duration_ms: Optional[int] = None,
+        duration_ms: int | None = None,
     ):
         super().__init__(message, duration_ms)
 
@@ -113,9 +112,7 @@ class LogParsingError(SamplingError):
 
 
 class NoMemoryLeft(SamplingError):
-    def __init__(
-        self, message: str = "No memory left in the memory space to explore with."
-    ):
+    def __init__(self, message: str = "No memory left in the memory space to explore with."):
         super().__init__(message)
 
 
