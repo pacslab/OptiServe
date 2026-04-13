@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  LambdaExecutionRoleName:
+    Type: String
+    Default: lambda-role
+    Description: >-
+      Name of the pre-existing IAM role the inference function assumes. The role
+      ARN is built from this name and the deploying account, so no account id is
+      committed to the repository.
+
 Globals:
   Function:
     Timeout: 900
@@ -34,7 +43,7 @@ Resources:
         Variables:
           TRANSFORMERS_CACHE: /tmp
           HF_HOME: /tmp
-      Role: arn:aws:iam::123456789012:role/lambda-role # Explicit IAM Role used by the Inference function
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaExecutionRoleName}" # Explicit IAM Role used by the Inference function
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./app
@@ -62,4 +71,4 @@ Outputs:
     Value: !GetAtt InferenceFunctionBERT.Arn
   InferenceFunctionIamRole:
     Description: Explicit IAM Role used by the Inference function
-    Value: "arn:aws:iam::123456789012:role/lambda-role"
+    Value: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaExecutionRoleName}"

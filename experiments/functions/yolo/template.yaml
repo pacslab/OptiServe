@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  LambdaExecutionRoleName:
+    Type: String
+    Default: lambda-role
+    Description: >-
+      Name of the pre-existing IAM role the inference function assumes. The role
+      ARN is built from this name and the deploying account, so no account id is
+      committed to the repository.
+
 Globals:
   Function:
     Timeout: 900         # Timeout is in seconds
@@ -23,7 +32,7 @@ Resources:
       PackageType: Image
       Architectures:
         - x86_64
-      Role: arn:aws:iam::123456789012:role/lambda-role
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaExecutionRoleName}"
       Events:
         Inference:
           Type: Api
@@ -62,4 +71,4 @@ Outputs:
     Value: !GetAtt InferenceFunctionYOLO.Arn
   InferenceFunctionIamRole:
     Description: Explicit IAM Role used by the Inference function
-    Value: "arn:aws:iam::123456789012:role/lambda-role"
+    Value: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaExecutionRoleName}"
