@@ -6,7 +6,14 @@
 
 The shared "start query then poll for results" loop lives once in the
 :class:`AWSLogs` base class.
+
+**Time units.** ``start_time`` and ``end_time`` are epoch *seconds*, matching
+CloudWatch's ``StartQuery`` API — not the epoch milliseconds that Lambda log
+events themselves carry. Mixing the two is silent: a millisecond window is a
+window ending in the year 65 000, which returns everything, and a second-valued
+timestamp compared against milliseconds returns nothing.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,14 +21,14 @@ import re
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, List, Optional, Union
+from typing import Any
 
 import boto3
 import pandas as pd
 
 from optiserve.aws.log_parser import LogParser
-from optiserve.aws.session import create_session
-from optiserve.exceptions import FunctionTimeout
+from optiserve.aws.session import create_client, create_session
+from optiserve.exceptions import FunctionTimeout, LogParsingError
 from optiserve.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,14 +39,14 @@ class AWSLogs(ABC):
 
     def __init__(
         self,
-        boto_session: Optional[boto3.Session] = None,
+        boto_session: boto3.Session | None = None,
         total_logs_limit: int = 10000,
         poll_attempts: int = 30,
         poll_interval_s: float = 2.0,
     ):
         if boto_session is None:
             boto_session = create_session()
-        self._aws_logs_client = boto_session.client("logs")
+        self._aws_logs_client = create_client(boto_session, "logs")
         self.log_parser = LogParser()
         self._total_logs_limit = total_logs_limit
         self._poll_attempts = poll_attempts
@@ -47,10 +54,22 @@ class AWSLogs(ABC):
 
     def _run_query(
         self, log_group_name: str, query_string: str, start_time: int, end_time: int
-    ) -> List[list]:
+    ) -> list[list]:
         """Start a Logs Insights query and poll until it completes, returning
-        the raw ``results`` rows. Raises ``FunctionTimeout`` if the query does
-        not finish within the polling budget."""
+        the raw ``results`` rows.
+
+        Three failure modes are distinguished, because they need different
+        responses and used to be conflated into one ``FunctionTimeout``:
+
+        * the query **failed or was cancelled** server-side — polling on is
+          pointless, so it raises immediately;
+        * the query **did not finish** inside the polling budget — it is
+          explicitly stopped rather than left running (an abandoned Insights
+          query keeps consuming the account's concurrent-query quota, and the
+          quota is small); and
+        * the query **hit the row limit** — the results are silently truncated,
+          which would otherwise show up much later as missing profiling data.
+        """
         response = self._aws_logs_client.start_query(
             logGroupName=log_group_name,
             queryString=query_string,
@@ -60,16 +79,44 @@ class AWSLogs(ABC):
         )
         query_id = response["queryId"]
 
-        for _ in range(self._poll_attempts):
-            response = self._aws_logs_client.get_query_results(queryId=query_id)
-            if response["status"] == "Complete":
-                return response["results"]
-            time.sleep(self._poll_interval_s)
+        try:
+            for _ in range(self._poll_attempts):
+                response = self._aws_logs_client.get_query_results(queryId=query_id)
+                status = response["status"]
+                if status == "Complete":
+                    results = response["results"]
+                    if len(results) >= self._total_logs_limit:
+                        logger.warning(
+                            "Logs Insights returned %d rows, at the configured limit "
+                            "of %d: results are truncated and profiling data may be "
+                            "missing. Narrow the time window or raise "
+                            "total_logs_limit.",
+                            len(results),
+                            self._total_logs_limit,
+                        )
+                    return results
+                if status in ("Failed", "Cancelled", "Timeout"):
+                    raise LogParsingError(
+                        f"CloudWatch Logs Insights query {query_id} ended with status {status!r}."
+                    )
+                time.sleep(self._poll_interval_s)
+        except Exception:
+            self._stop_query(query_id)
+            raise
 
+        self._stop_query(query_id)
         raise FunctionTimeout("Could not get the logs in time.")
 
+    def _stop_query(self, query_id: str) -> None:
+        """Best-effort cancellation of a still-running query."""
+        try:
+            self._aws_logs_client.stop_query(queryId=query_id)
+        except Exception:
+            logger.debug("stop_query(%s) failed", query_id, exc_info=True)
+
     @abstractmethod
-    def get_logs(self, start_time: int, end_time: int):
+    def get_logs(self, start_time: int, end_time: int) -> Any:
+        """Fetch logs for the window. Times are epoch **seconds** (see module doc)."""
         ...
 
 
@@ -78,15 +125,13 @@ class AWSFunctionLogs(AWSLogs):
 
     def __init__(
         self,
-        boto_session: Optional[boto3.Session] = None,
-        function_name: Optional[str] = None,
+        boto_session: boto3.Session | None = None,
+        function_name: str | None = None,
         total_logs_limit: int = 10000,
         docker_deploy: bool = False,
-        **kwargs,
-    ):
-        super().__init__(
-            boto_session=boto_session, total_logs_limit=total_logs_limit, **kwargs
-        )
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(boto_session=boto_session, total_logs_limit=total_logs_limit, **kwargs)
         if function_name is None:
             raise ValueError("function_name must be provided")
         self._function_name = function_name
@@ -95,13 +140,9 @@ class AWSFunctionLogs(AWSLogs):
 
     # Custom marker the profiled Lambda prints so we can group logs by model:
     #   "Model: {model_name} - LogStream: {log_stream_id} - Starting execution"
-    _MODEL_MARKER = re.compile(
-        r"Model:\s*(.*?)\s*-\s*LogStream:\s*(.*?)\s*-\s*Starting execution"
-    )
+    _MODEL_MARKER = re.compile(r"Model:\s*(.*?)\s*-\s*LogStream:\s*(.*?)\s*-\s*Starting execution")
 
-    def get_logs(
-        self, start_time: int, end_time: int
-    ) -> Union[List[dict], Dict[str, List[dict]]]:
+    def get_logs(self, start_time: int, end_time: int) -> list[dict] | dict[str, list[dict]]:
         """Return per-invocation metric dicts.
 
         If a model marker is found, returns ``{model_name: [events]}``; otherwise
@@ -122,17 +163,13 @@ class AWSFunctionLogs(AWSLogs):
                 "'REPORT' | sort @timestamp desc"
             )
 
-        results = self._run_query(
-            self._log_group_name, query_string, start_time, end_time
-        )
+        results = self._run_query(self._log_group_name, query_string, start_time, end_time)
 
         # Group events by log stream.
-        stream_logs: Dict[str, List[dict]] = {}
+        stream_logs: dict[str, list[dict]] = {}
         for row in results:
             event = {item["field"]: item["value"] for item in row}
-            parsed = self.log_parser.parse_function_profiling_logs(
-                event.get("@message", "")
-            )
+            parsed = self.log_parser.parse_function_profiling_logs(event.get("@message", ""))
             parsed["Timestamp"] = event.get("@timestamp", "")
             parsed["LogStream"] = event.get("@logStream", "")
             parsed["Ptr"] = event.get("@ptr", "")
@@ -140,7 +177,7 @@ class AWSFunctionLogs(AWSLogs):
             stream_logs.setdefault(event.get("@logStream", "unknown"), []).append(parsed)
 
         # Assign a model name per stream from the marker log, keep metric rows.
-        logs_by_model: Dict[str, List[dict]] = {}
+        logs_by_model: dict[str, list[dict]] = {}
         for events in stream_logs.values():
             model_name = "unknown"
             for ev in events:
@@ -156,7 +193,7 @@ class AWSFunctionLogs(AWSLogs):
         return logs_by_model
 
     def get_logs_df(
-        self, start_time: int, end_time: int, model_name: Optional[str] = None
+        self, start_time: int, end_time: int, model_name: str | None = None
     ) -> pd.DataFrame:
         """Return the logs as a DataFrame. When grouped by model and no
         ``model_name`` is given, all models are concatenated with a ``Model``
@@ -174,9 +211,7 @@ class AWSFunctionLogs(AWSLogs):
                 frame = pd.DataFrame(events)
                 frame["Model"] = model
                 frames.append(frame)
-            return (
-                pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-            )
+            return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         return pd.DataFrame(logs)
 
 
@@ -185,22 +220,18 @@ class AWSApplicationLogs(AWSLogs):
 
     def __init__(
         self,
-        boto_session: Optional[boto3.Session] = None,
-        application_name: Optional[str] = None,
+        boto_session: boto3.Session | None = None,
+        application_name: str | None = None,
         total_logs_limit: int = 10000,
-        **kwargs,
-    ):
-        super().__init__(
-            boto_session=boto_session, total_logs_limit=total_logs_limit, **kwargs
-        )
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(boto_session=boto_session, total_logs_limit=total_logs_limit, **kwargs)
         if application_name is None:
             raise ValueError("application_name must be provided")
         self._application_name = application_name
         self._log_group_name = f"/aws/vendedlogs/states/{self._application_name}"
 
-    def get_logs(
-        self, start_time: int, end_time: int
-    ) -> Dict[str, Dict[str, float]]:
+    def get_logs(self, start_time: int, end_time: int) -> dict[str, dict[str, float]]:
         """Return ``{execution_name: {'s': start, 'e': end, 'd': duration}}``."""
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time must be provided")
@@ -209,11 +240,9 @@ class AWSApplicationLogs(AWSLogs):
             "fields @timestamp, @message | filter type = 'ExecutionStarted' or "
             "type = 'ExecutionSucceeded' | sort id desc"
         )
-        results = self._run_query(
-            self._log_group_name, query_string, start_time, end_time
-        )
+        results = self._run_query(self._log_group_name, query_string, start_time, end_time)
 
-        executions: Dict[str, Dict[str, float]] = defaultdict(
+        executions: dict[str, dict[str, float]] = defaultdict(
             lambda: {"s": 0.0, "e": 0.0, "d": 0.0}
         )
         for row in results:
@@ -225,6 +254,24 @@ class AWSApplicationLogs(AWSLogs):
                 key = "s" if message["type"] == "ExecutionStarted" else "e"
                 executions[execution][key] = timestamp
 
-        for value in executions.values():
+        # An execution that straddles the query window contributes only one of
+        # its two events, leaving the other at the 0.0 default — which produced
+        # a duration of +/- the epoch timestamp (order 1e12 ms) and silently
+        # poisoned every aggregate computed from these numbers. Report only
+        # executions the window fully contains, and say how many were dropped.
+        complete = {
+            name: value
+            for name, value in executions.items()
+            if value["s"] > 0.0 and value["e"] > 0.0
+        }
+        dropped = len(executions) - len(complete)
+        if dropped:
+            logger.warning(
+                "Ignoring %d Step Functions execution(s) not fully contained in "
+                "the query window (missing a start or end event).",
+                dropped,
+            )
+
+        for value in complete.values():
             value["d"] = value["e"] - value["s"]
-        return dict(executions)
+        return complete
