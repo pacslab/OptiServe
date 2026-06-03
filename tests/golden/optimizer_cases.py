@@ -5,13 +5,16 @@ and runs every greedy strategy / BCR variant, capturing the returned
 (rt, cost, accuracy, mem_config, model_config, iterations) so the Stage-7
 optimizer refactor can be proven behavior-preserving.
 """
+
 from __future__ import annotations
 
 import contextlib
 import io
 
+from optiserve.config import OptimizationConfig
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
 from optiserve.optimization.application_optimizer import ApplicationOptimizer
+from optiserve.optimization.compat import OptimizerCompat
 from optiserve.workflow import ModelVariant, WorkflowGraph
 
 _GRID = [128, 256, 512, 1024]
@@ -21,7 +24,7 @@ _ACCURACY_FORMULA = lambda *accs: sum(accs) / len(accs)  # noqa: E731 (mean, any
 
 def _variants(base):
     return [
-        ModelVariant(f"v{i}", (lambda b, s: (lambda m: b - s * m))(base + 200 * i, 0.05 * (i + 1)))
+        ModelVariant(f"v{i}", (lambda b, s: lambda m: b - s * m)(base + 200 * i, 0.05 * (i + 1)))
         for i in range(3)
     ]
 
@@ -39,18 +42,36 @@ def _cyclic():
     wg.add_ml_function(1, _variants(800), _GRID)
     wg.add_ml_function(2, _variants(700), _GRID)
     wg.add_ml_function(3, _variants(600), _GRID)
-    wg.add_edges([
-        ("Start", 1, 1.0), (1, 2, 1.0), (2, 3, 0.7), (2, 1, 0.3),
-        (3, 3, 0.2), (3, "End", 0.8),
-    ])
+    wg.add_edges(
+        [
+            ("Start", 1, 1.0),
+            (1, 2, 1.0),
+            (2, 3, 0.7),
+            (2, 1, 0.3),
+            (3, 3, 0.2),
+            (3, "End", 0.8),
+        ]
+    )
     return wg.to_networkx()
 
 
-def _optimizer(graph):
+def _optimizer(graph, compat=OptimizerCompat.PUBLISHED):
+    """Build an optimizer under an explicit compatibility preset.
+
+    The baselines in this directory are *published* numbers, so they are
+    captured under ``PUBLISHED`` — bug-for-bug. The corrected optimizer is
+    frozen separately (``optimizer_baseline_corrected.json``), so a change to
+    either path is caught, and neither can drift into the other.
+    """
     app = ApplicationPerformanceModeling(graph, delay_type="None")
     app.cost_calculator.aws_pricing_units = dict(_PRICING)
     with contextlib.redirect_stdout(io.StringIO()):
-        return ApplicationOptimizer(app, mem_list={}, model_list={})
+        return ApplicationOptimizer(
+            app,
+            mem_list={},
+            model_list={},
+            config=OptimizationConfig(compat=compat),
+        )
 
 
 def _round(result):
@@ -65,10 +86,10 @@ def _round(result):
     }
 
 
-def compute_all():
+def compute_all(compat=OptimizerCompat.PUBLISHED):
     out = {}
     for graph_name, builder in (("acyclic", _acyclic), ("cyclic", _cyclic)):
-        opt = _optimizer(builder())
+        opt = _optimizer(builder(), compat=compat)
         budget = (opt.minimal_cost + opt.maximal_cost) / 2
         rt_c = (opt.minimal_avg_rt + opt.maximal_avg_rt) / 2
         acc_c = 0.5

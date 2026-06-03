@@ -4,12 +4,12 @@ from typing import Dict, List
 
 import networkx as nx
 import numpy as np
-import pandas as pd
-from tqdm import tqdm
 
+from optiserve.config import OptimizationConfig
 from optiserve.logging import get_logger
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
 from optiserve.optimization.accuracy import AccuracyModel
+from optiserve.optimization.compat import OptimizerCompat
 from optiserve.optimization.result import OptimizationResult
 
 logger = get_logger(__name__)
@@ -41,13 +41,17 @@ class ApplicationOptimizer:
     def __init__(self,
                  Appworkflow: ApplicationPerformanceModeling,
                  mem_list: Dict[str, List] = None,
-                 model_list: Dict[str, List] = None):
+                 model_list: Dict[str, List] = None,
+                 config: OptimizationConfig = None):
 
         self.App = Appworkflow
 
         # Retained for backward compatibility; not used by the optimizer.
         self.mem_list = mem_list or {}
         self.model_list = model_list or {}
+
+        self._config = config or OptimizationConfig()
+        self.compat = self._config.compat
 
         # Per-node, per-variant accuracy: measured values when a node provides an
         # 'accuracy_list', otherwise a normalized rank i/N. `model_accuracy_list`
@@ -98,19 +102,19 @@ class ApplicationOptimizer:
 
     def get_optimization_boundary(self):
         node_list = [node for node in self.App.workflow_graph.nodes if node not in ['Start', 'End']]
-        
+
         minimal_mem_configuration = {}
         maximal_mem_configuration = {}
-        
+
         minimal_model_configuration = {}
         maximal_model_configuration = {}
-        
+
         for node in node_list:
             model_variants = self.App.workflow_graph.nodes[node]['perf_profile']
-            
+
             minimal_mem_configuration[node] = np.inf
             maximal_mem_configuration[node] = -np.inf
-            
+
             minimal_model_configuration[node] = 0
             maximal_model_configuration[node] = len(model_variants) - 1
 
@@ -124,21 +128,19 @@ class ApplicationOptimizer:
 
         # Calculating the maximal possible cost
         self.update_App_workflow_mem_rt(self.App, maximal_mem_configuration, maximal_model_configuration)
-        maximal_cost = self.App.get_avg_cost()
+        maximal_cost = self.App.evaluate_avg_cost()
 
         # Calculating the minimal possible average response time
         self.update_App_workflow_mem_rt(self.App, maximal_mem_configuration, minimal_model_configuration)
-        self.App.get_simple_dag()
-        minimal_avg_rt = self.App.get_avg_rt()
+        minimal_avg_rt = self.App.evaluate_avg_rt()
 
         # Calculating the minimal possible cost
         self.update_App_workflow_mem_rt(self.App, minimal_mem_configuration, minimal_model_configuration)
-        minimal_cost = self.App.get_avg_cost()
+        minimal_cost = self.App.evaluate_avg_cost()
 
         # Calculating the maximal possible average response time
         self.update_App_workflow_mem_rt(self.App, minimal_mem_configuration, maximal_model_configuration)
-        self.App.get_simple_dag()
-        maximal_avg_rt = self.App.get_avg_rt()
+        maximal_avg_rt = self.App.evaluate_avg_rt()
 
         logger.debug('Minimal Memory Configuration: {}'.format(minimal_mem_configuration))
         logger.debug('Maximal Memory Configuration: {}'.format(maximal_mem_configuration))
@@ -149,7 +151,7 @@ class ApplicationOptimizer:
         logger.debug('Minimal Cost: {}'.format(minimal_cost))
         logger.debug('Maximal Average Response Time: {}'.format(maximal_avg_rt))
         logger.debug('Optimization Boundary Calculation Completed.')
-        
+
         return (minimal_mem_configuration, maximal_mem_configuration, minimal_model_configuration, maximal_model_configuration, maximal_cost, minimal_avg_rt, minimal_cost,
                 maximal_avg_rt)
 
@@ -215,13 +217,13 @@ class ApplicationOptimizer:
 
     def compute_accuracy(self, model_configuration, accuracy_formula):
         accuracy_values = [self.model_accuracy_list[node][model_configuration[node]] for node in self.App.workflow_graph.nodes if node not in ['Start', 'End']]
-        
+
         return accuracy_formula(*accuracy_values)
-    
-    
-    def accuracy_is_satisfied(self, model_configuration, accuracy_constraint, accuracy_formula):    
+
+
+    def accuracy_is_satisfied(self, model_configuration, accuracy_constraint, accuracy_formula):
         return self.compute_accuracy(model_configuration, accuracy_formula) >= accuracy_constraint
-    
+
 
     def BPBA(self, budget, accuracy_constraint, accuracy_formula, optimize_model_configuration=True, BCR=False, BCRtype="RT/M", BCRthreshold=0.1):
         '''
@@ -251,26 +253,26 @@ class ApplicationOptimizer:
             self.update_available_mem_list(BCR=False)
         if (BCR):
             cost = self.minimal_cost
-                    
+
         curr_model_configuration = copy.deepcopy(self.minimal_model_configuration)
         curr_mem_configuration = copy.deepcopy(self.minimal_mem_configuration)
         curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-        
+
         # First phase is finding the model configuration that satisfies the accuracy constraint holding the budget constraint.
         # We start the minimal memory configuration and try to optimize the model configuration.
-        
+
         self.update_App_workflow_mem_rt(self.App, curr_mem_configuration, curr_model_configuration)
         current_cost = self.minimal_cost
         surplus = budget - current_cost
-    
+
         last_e2ert_cost_BCR = 0
         order = 0
         iterations_count = 0
-        
+
         ml_functions = [node for node in self.App.workflow_graph.nodes if node not in ['Start', 'End'] and len(self.model_accuracy_list[node]) > 1]
         mem_list = curr_mem_configuration
 
-        w = 100
+        w = self._config.accuracy_penalty_weight
         if optimize_model_configuration:
             while not self.accuracy_is_satisfied(curr_model_configuration, accuracy_constraint, accuracy_formula) and (round(surplus, 4) >= 0):
                 iterations_count += 1
@@ -287,9 +289,9 @@ class ApplicationOptimizer:
                             continue
                         self.update_App_workflow_mem_rt(self.App, mem_dict={node: node_curr_mem}, model_dict={node: model_i})
                         curr_model_configuration[node] = model_i
-                        increased_cost = self.App.get_avg_cost() - current_cost
+                        increased_cost = self.App.evaluate_avg_cost() - current_cost
                         acc_after = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-                        
+
                         if (increased_cost <= surplus):
                             acc_gap = acc_after - accuracy_constraint
                             score = -increased_cost + w * min(acc_gap, 0.0)
@@ -297,66 +299,74 @@ class ApplicationOptimizer:
                             avg_cost_increase_of_each_model_config[model_i] = (increased_acc,
                                                                             increased_cost,
                                                                             score)
-                            
+
                         curr_model_configuration[node] = model_backup
                         self.update_App_workflow_mem_rt(self.App, mem_dict={node: node_curr_mem}, model_dict={node: model_backup})
-                    
+
                     if len(avg_cost_increase_of_each_model_config) != 0:
-                        
+
                         max_BCR = np.max([item[2] for item in avg_cost_increase_of_each_model_config.values()])
                         min_cost_increase_under_MAX_BCR = np.min([item[1] for item in avg_cost_increase_of_each_model_config.values()
                                                                 if item[2] == max_BCR])
                         max_increased_acc_under_MAX_cost_increase_MAX_BCR = np.max(
                             [item[0] for item in avg_cost_increase_of_each_model_config.values()
                             if item[1] == min_cost_increase_under_MAX_BCR and item[2] == max_BCR])
-                        
+
                         reversed_dict = dict(zip(avg_cost_increase_of_each_model_config.values(),
                                                     avg_cost_increase_of_each_model_config.keys()))
-                        
+
                         min_avg_cost_increase_of_each_node[node] = (reversed_dict[(
                                 max_increased_acc_under_MAX_cost_increase_MAX_BCR, min_cost_increase_under_MAX_BCR,
                                 max_BCR)],
                                                                     max_increased_acc_under_MAX_cost_increase_MAX_BCR,
                                                                     min_cost_increase_under_MAX_BCR,
                                                                     max_BCR)
-                            
+
                 if (len(min_avg_cost_increase_of_each_node) == 0):
                     if (order >= self.simple_paths_num - 1):
                         break
                     else:
                         order += 1
                         continue
-                
+
                 max_BCR = np.max([item[3] for item in min_avg_cost_increase_of_each_node.values()])
                 max_increased_acc_under_MAX_cost_increase_MAX_BCR = np.max(
                     [item[1] for item in min_avg_cost_increase_of_each_node.values() if item[3] == max_BCR])
                 target_node = [key for key in min_avg_cost_increase_of_each_node if
                                 min_avg_cost_increase_of_each_node[key][3] == max_BCR and
                                 min_avg_cost_increase_of_each_node[key][1] == max_increased_acc_under_MAX_cost_increase_MAX_BCR][0]
-                
+
                 target_model = min_avg_cost_increase_of_each_node[target_node][0]
-                
+
                 self.update_App_workflow_mem_rt(self.App,
                                                 mem_dict={target_node: mem_list[target_node]},
                                                 model_dict={target_node: target_model})
                 curr_model_configuration[target_node] = target_model
                 max_increased_acc_under_MAX_cost_increase_MAX_BCR = min_avg_cost_increase_of_each_node[target_node][1]
                 min_cost_increase_under_MAX_BCR = min_avg_cost_increase_of_each_node[target_node][2]
-                self.App.get_simple_dag()
-                current_avg_rt = self.App.get_avg_rt()
+                current_avg_rt = self.App.evaluate_avg_rt()
                 curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-                surplus -= min_cost_increase_under_MAX_BCR
-                
+                if self.compat.enabled(OptimizerCompat.LEGACY_BPBA_SURPLUS):
+                    # Published behaviour: `current_cost` is never rebased, so
+                    # `increased_cost` on the next iteration still includes this
+                    # upgrade — which `surplus` has already paid for. Every
+                    # prior upgrade is therefore charged to the budget twice.
+                    surplus -= min_cost_increase_under_MAX_BCR
+                else:
+                    # Rebase against what the workflow actually costs now,
+                    # mirroring what BCPA's equivalent loop already does for RT.
+                    current_cost = self.App.evaluate_avg_cost()
+                    surplus = budget - current_cost
+
 
         order = 0
-        
-        cost = self.App.get_avg_cost()
+
+        cost = self.App.evaluate_avg_cost()
         surplus = budget - cost
 
-        self.App.get_simple_dag()
-        current_avg_rt = self.App.get_avg_rt()
+        current_avg_rt = self.App.evaluate_avg_rt()
         current_cost = cost
-                
+
         while (round(surplus, 4) >= 0):
             iterations_count += 1
             cp = self.find_PRCP(order=order, leastCritical=False)
@@ -370,10 +380,9 @@ class ApplicationOptimizer:
                     if (mem <= mem_backup[node]):
                         break
                     self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem}, model_dict={node: curr_model_configuration[node]})
-                    increased_cost = self.App.get_avg_cost() - current_cost
+                    increased_cost = self.App.evaluate_avg_cost() - current_cost
                     if (increased_cost < surplus):
-                        self.App.get_simple_dag()
-                        rt_reduction = current_avg_rt - self.App.get_avg_rt()
+                        rt_reduction = current_avg_rt - self.App.evaluate_avg_rt()
                         if (rt_reduction > 0):
                             avg_rt_reduction_of_each_mem_config[mem] = (rt_reduction, increased_cost)
                 self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem_backup[node]}, model_dict={node: curr_model_configuration[node]})
@@ -446,7 +455,7 @@ class ApplicationOptimizer:
             min_increased_cost_under_MAX_rt_reduction = max_avg_rt_reduction_of_each_node[target_node][2]
             current_avg_rt = current_avg_rt - max_rt_reduction
             surplus = surplus - min_increased_cost_under_MAX_rt_reduction
-            current_cost = self.App.get_avg_cost()
+            current_cost = self.App.evaluate_avg_cost()
             current_e2ert_cost_BCR = max_rt_reduction / min_increased_cost_under_MAX_rt_reduction
             if (current_e2ert_cost_BCR == float('Inf')):
                 last_e2ert_cost_BCR = 0
@@ -486,30 +495,30 @@ class ApplicationOptimizer:
             self.update_available_mem_list(BCR=True, BCRthreshold=BCRthreshold, BCRinverse=True)
         else:
             self.update_available_mem_list(BCR=False)
-        
+
         order = 0
         iterations_count = 0
         last_e2ert_cost_BCR = 0
-        
+
         curr_model_configuration = copy.deepcopy(self.minimal_model_configuration)
         curr_mem_configuration = copy.deepcopy(self.maximal_mem_configuration)
         curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-        
+
         # First phase is finding the model configuration that satisfies the accuracy constraint holding the budget constraint.
         # We start the maximal memory configuration and try to optimize the model configuration.
 
         self.update_App_workflow_mem_rt(self.App, curr_mem_configuration, curr_model_configuration)
         current_avg_rt = self.minimal_avg_rt
         performance_surplus = rt_constraint - current_avg_rt
-            
+
         ml_functions = [node for node in self.App.workflow_graph.nodes if node not in ['Start', 'End'] and len(self.model_accuracy_list[node]) > 1]
-        mem_list = nx.get_node_attributes(self.App.workflow_graph, 'mem') 
-        
+        mem_list = nx.get_node_attributes(self.App.workflow_graph, 'mem')
+
         logger.debug('RT Constraint: {}'.format(rt_constraint))
         logger.debug('Accuracy Constraint: {}'.format(accuracy_constraint))
         logger.debug('Performance Surplus: {}'.format(performance_surplus))
         logger.debug('Current Average Response Time: {}'.format(current_avg_rt))
-        w = 100
+        w = self._config.accuracy_penalty_weight
 
         if optimize_model_configuration:
             while not self.accuracy_is_satisfied(curr_model_configuration, accuracy_constraint, accuracy_formula) and (round(performance_surplus, 4) >= 0):
@@ -527,10 +536,9 @@ class ApplicationOptimizer:
                             continue
                         self.update_App_workflow_mem_rt(self.App, mem_dict={node: node_curr_mem}, model_dict={node: model_i})
                         curr_model_configuration[node] = model_i
-                        self.App.get_simple_dag()
-                        increased_rt = self.App.get_avg_rt() - current_avg_rt
+                        increased_rt = self.App.evaluate_avg_rt() - current_avg_rt
                         acc_after = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-                        
+
                         if (increased_rt <= performance_surplus):
                             acc_gap = acc_after - accuracy_constraint
                             score = -increased_rt + w * min(acc_gap, 0.0)
@@ -538,62 +546,60 @@ class ApplicationOptimizer:
                             avg_rt_increase_of_each_model_config[model_i] = (increased_acc,
                                                                             increased_rt,
                                                                             score)
-                            
+
                         curr_model_configuration[node] = model_backup
                         self.update_App_workflow_mem_rt(self.App, mem_dict={node: node_curr_mem}, model_dict={node: model_backup})
-                    
+
                     if len(avg_rt_increase_of_each_model_config) != 0:
-                        
+
                         max_BCR = np.max([item[2] for item in avg_rt_increase_of_each_model_config.values()])
                         min_rt_increase_under_MAX_BCR = np.min([item[1] for item in avg_rt_increase_of_each_model_config.values()
                                                                 if item[2] == max_BCR])
                         max_increased_acc_under_MAX_rt_increase_MAX_BCR = np.max(
                             [item[0] for item in avg_rt_increase_of_each_model_config.values()
                             if item[1] == min_rt_increase_under_MAX_BCR and item[2] == max_BCR])
-                        
+
                         reversed_dict = dict(zip(avg_rt_increase_of_each_model_config.values(),
                                                     avg_rt_increase_of_each_model_config.keys()))
-                        
+
                         min_avg_rt_increase_of_each_node[node] = (reversed_dict[(
                                 max_increased_acc_under_MAX_rt_increase_MAX_BCR, min_rt_increase_under_MAX_BCR,
                                 max_BCR)],
                                                                     max_increased_acc_under_MAX_rt_increase_MAX_BCR,
                                                                     min_rt_increase_under_MAX_BCR,
                                                                     max_BCR)
-                            
+
                 if (len(min_avg_rt_increase_of_each_node) == 0):
                     if (order >= self.simple_paths_num - 1):
                         break
                     else:
                         order += 1
                         continue
-                
+
                 max_BCR = np.max([item[3] for item in min_avg_rt_increase_of_each_node.values()])
                 max_increased_acc_under_MAX_rt_increase_MAX_BCR = np.max(
                     [item[1] for item in min_avg_rt_increase_of_each_node.values() if item[3] == max_BCR])
                 target_node = [key for key in min_avg_rt_increase_of_each_node if
                                 min_avg_rt_increase_of_each_node[key][3] == max_BCR and
                                 min_avg_rt_increase_of_each_node[key][1] == max_increased_acc_under_MAX_rt_increase_MAX_BCR][0]
-                
+
                 target_model = min_avg_rt_increase_of_each_node[target_node][0]
-                
+
                 self.update_App_workflow_mem_rt(self.App,
                                                 mem_dict={target_node: mem_list[target_node]},
                                                 model_dict={target_node: target_model})
                 curr_model_configuration[target_node] = target_model
                 max_increased_acc_under_MAX_rt_increase_MAX_BCR = min_avg_rt_increase_of_each_node[target_node][1]
                 min_rt_increase_under_MAX_BCR = min_avg_rt_increase_of_each_node[target_node][2]
-                self.App.get_simple_dag()
-                current_avg_rt = self.App.get_avg_rt()
+                current_avg_rt = self.App.evaluate_avg_rt()
                 curr_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
                 performance_surplus = performance_surplus - min_rt_increase_under_MAX_BCR
-                
 
-        
-        current_cost = self.App.get_avg_cost()
-        
-        self.App.get_simple_dag()
-        current_avg_rt = self.App.get_avg_rt()
+
+
+        current_cost = self.App.evaluate_avg_cost()
+
+        current_avg_rt = self.App.evaluate_avg_rt()
         performance_surplus = rt_constraint - current_avg_rt
 
         while (round(performance_surplus, 4) >= 0):
@@ -610,10 +616,9 @@ class ApplicationOptimizer:
                     if (mem >= mem_backup[node]):
                         break
                     self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem}, model_dict={node: curr_model_configuration[node]})
-                    self.App.get_simple_dag()
-                    temp_avg_rt = self.App.get_avg_rt()
+                    temp_avg_rt = self.App.evaluate_avg_rt()
                     increased_rt = temp_avg_rt - current_avg_rt
-                    cost_reduction = current_cost - self.App.get_avg_cost()
+                    cost_reduction = current_cost - self.App.evaluate_avg_cost()
                     if (increased_rt < performance_surplus and cost_reduction > 0):
                         cost_reduction_of_each_mem_config[mem] = (cost_reduction, increased_rt)
                 self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem_backup[node]}, model_dict={node: curr_model_configuration[node]})
@@ -702,75 +707,99 @@ class ApplicationOptimizer:
         logger.debug('BCPC optimization completed.')
         return OptimizationResult(current_avg_rt, current_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
 
-    
+
+    # -- canonical strategy names ------------------------------------------ #
+    # The method definitions keep their historical names (BPBA/BCPA); these are
+    # the preferred spelling used throughout the docs and the CLI:
+    #   BPBC = best performance under budget + accuracy
+    #   BCPC = best cost under performance + accuracy
+    #   BAPB = best accuracy under performance + budget
+    def BPBC(self, *args, **kwargs) -> OptimizationResult:
+        """Minimize end-to-end response time under budget + accuracy constraints."""
+        return self.BPBA(*args, **kwargs)
+
+    def BCPC(self, *args, **kwargs) -> OptimizationResult:
+        """Minimize cost under response-time + accuracy constraints."""
+        return self.BCPA(*args, **kwargs)
+
     def BAPB(self, rt_constraint, budget, accuracy_formula, BCR=False, BCRtype="RT/M", BCRthreshold=0.1):
-        
+
         delta_rt = lambda new_rt, old_rt: abs(new_rt - old_rt) / (self.maximal_avg_rt - self.minimal_avg_rt) if (self.maximal_avg_rt - self.minimal_avg_rt) != 0 else 0
         delta_cost = lambda new_cost, old_cost: abs(new_cost - old_cost) / (self.maximal_cost - self.minimal_cost) if (self.maximal_cost - self.minimal_cost) != 0 else 0
-        
+
         order = 0
         iterations_count = 0
-        
+
         # First phase is finding the best possible RT under the budget constraint and the lowest possible model configuration.
         current_avg_rt, current_avg_cost, current_accuracy, curr_mem_configuration, curr_model_configuration, _ = self.BCPA(rt_constraint,
-                                                                                                                    None, 
-                                                                                                                    accuracy_formula, 
-                                                                                                                    optimize_model_configuration=False, 
+                                                                                                                    None,
+                                                                                                                    accuracy_formula,
+                                                                                                                    optimize_model_configuration=False,
                                                                                                                     BCR=BCR, BCRtype=BCRtype, BCRthreshold=BCRthreshold)
-        
+
         performance_surplus = rt_constraint - current_avg_rt
         budget_surplus = budget - current_avg_cost
-        
+
         while (round(performance_surplus, 4) >= 0) and (round(budget_surplus, 4) >= 0):
             iterations_count += 1
             cp = self.find_PRCP(order=order, leastCritical=False)
             max_acc_increase_of_each_node = {}
-            
+
             mem_backup = copy.deepcopy(curr_mem_configuration)
             model_backup = copy.deepcopy(curr_model_configuration)
 
             for node in cp:
                 if node in ['Start', 'End']:
                     continue
-                
+
                 bcr_values_for_each_change = {}
 
                 for model_i, _ in enumerate(self.model_accuracy_list[node]):
                     if model_i <= model_backup[node]:
                         continue
-                    
+
+                    # Under CORRECTED the current memory is a legal candidate,
+                    # so "upgrade the variant, keep the memory" — usually the
+                    # cheapest way to buy accuracy — can be scored at all. The
+                    # exclusion is right in BPBA phase 2 (same memory => no
+                    # latency reduction) and was copied here, where the variant
+                    # also changes.
+                    memory_floor_excluded = self.compat.enabled(
+                        OptimizerCompat.LEGACY_BAPB_MEM_GATE
+                    )
                     for mem in reversed(self.App.workflow_graph.nodes[node]['available_mem'][model_i]):
-                        if mem <= mem_backup[node]:
+                        if mem < mem_backup[node] or (
+                            memory_floor_excluded and mem == mem_backup[node]
+                        ):
                             break
                         self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem}, model_dict={node: model_i})
                         curr_model_configuration[node] = model_i
-                        temp_avg_cost = self.App.get_avg_cost()
-                        self.App.get_simple_dag()
-                        temp_avg_rt = self.App.get_avg_rt()
+                        temp_avg_cost = self.App.evaluate_avg_cost()
+                        temp_avg_rt = self.App.evaluate_avg_rt()
                         temp_accuracy = self.compute_accuracy(curr_model_configuration, accuracy_formula)
-                        
+
                         increased_cost = temp_avg_cost - current_avg_cost
                         increased_rt = temp_avg_rt - current_avg_rt
                         increased_accuracy = temp_accuracy - current_accuracy
-                        
+
                         if increased_accuracy < 0:
                             break
-                        
+
                         bcr = (increased_accuracy) / (delta_cost(temp_avg_cost, current_avg_cost) + delta_rt(temp_avg_rt, current_avg_rt))
-                        
+
                         if (increased_cost <= budget_surplus) and (increased_rt <= performance_surplus) and not np.isnan(bcr):
-                            
+
                             bcr_values_for_each_change[(mem, model_i)] = (
                                 bcr,
                                 increased_accuracy,
                                 increased_cost,
                                 increased_rt
                             )
-                            
+
                     self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem_backup[node]}, model_dict={node: model_i})
                 curr_model_configuration[node] = model_backup[node]
                 self.update_App_workflow_mem_rt(self.App, mem_dict={node: mem_backup[node]}, model_dict={node: model_backup[node]})
-                        
+
                 if len(bcr_values_for_each_change) != 0:
                     max_BCR = np.max([item[0] for item in bcr_values_for_each_change.values()])
                     max_accuracy_increase_under_MAX_BCR = np.max(
@@ -791,7 +820,7 @@ class ApplicationOptimizer:
                                                                 min_increased_cost_under_MAX_BCR,
                                                                 min_increased_rt_under_MAX_BCR,
                                                                 max_BCR)
-                
+
             if (len(max_acc_increase_of_each_node) == 0):
                 if (order >= self.simple_paths_num - 1):
                     break
@@ -806,24 +835,24 @@ class ApplicationOptimizer:
                             max_acc_increase_of_each_node[key][1] == max_accuracy_increase_under_MAX_BCR][0]
             target_mem = max_acc_increase_of_each_node[target_node][0][0]
             target_model = max_acc_increase_of_each_node[target_node][0][1]
-            
+
             curr_mem_configuration[target_node] = target_mem
             curr_model_configuration[target_node] = target_model
-            
+
             logger.debug('Target Node: {}, Target Mem: {}, Target Model: {}'.format(target_node, target_mem, target_model))
-            
+
             self.update_App_workflow_mem_rt(self.App, mem_dict={target_node: target_mem}, model_dict={target_node: target_model})
             max_accuracy_increase = max_acc_increase_of_each_node[target_node][1]
             min_increased_cost_under_MAX_BCR = max_acc_increase_of_each_node[target_node][2]
             min_increased_rt_under_MAX_BCR = max_acc_increase_of_each_node[target_node][3]
-            
+
             current_avg_cost = current_avg_cost + min_increased_cost_under_MAX_BCR
             current_avg_rt = current_avg_rt + min_increased_rt_under_MAX_BCR
             current_accuracy = current_accuracy + max_accuracy_increase
-            
+
             budget_surplus = budget_surplus - min_increased_cost_under_MAX_BCR
             performance_surplus = performance_surplus - min_increased_rt_under_MAX_BCR
-        
+
         current_mem_configuration = nx.get_node_attributes(self.App.workflow_graph, 'mem')
         del current_mem_configuration['Start']
         del current_mem_configuration['End']
@@ -833,12 +862,11 @@ class ApplicationOptimizer:
         logger.debug('Average Cost: {}'.format(current_avg_cost))
         logger.debug('BAPB optimization completed.')
         return OptimizationResult(current_avg_rt, current_avg_cost, self.compute_accuracy(curr_model_configuration, accuracy_formula), current_mem_configuration, curr_model_configuration, iterations_count)
-            
-            
 
-# Canonical strategy names (matching the paper / artifact suffixes). The method
-# definitions above keep their historical names; these aliases are the preferred
-# spelling: BPBC = best performance under budget + accuracy, BCPC = best cost
-# under performance + accuracy, BAPB = best accuracy under performance + budget.
-ApplicationOptimizer.BPBC = ApplicationOptimizer.BPBA
-ApplicationOptimizer.BCPC = ApplicationOptimizer.BCPA
+
+
+# NOTE: BPBC/BCPC are defined as real delegating methods on the class (see
+# ApplicationOptimizer.BPBC / .BCPC above) rather than assigned here after the
+# class body. Assigned aliases are invisible to static analysis, so every
+# caller of the *preferred* spelling was unchecked by mypy and unresolvable by
+# an IDE.

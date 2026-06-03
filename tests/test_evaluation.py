@@ -1,5 +1,6 @@
 """End-to-end evaluation pipeline test: ground truth -> opt curve ->
 optimization-accuracy metrics, on a small offline graph."""
+
 import contextlib
 import io
 import os
@@ -11,24 +12,27 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "golden"))
 
-from optimizer_cases import _ACCURACY_FORMULA, _PRICING, _acyclic  # noqa: E402
+from optimizer_cases import _ACCURACY_FORMULA, _PRICING, _acyclic
 
-from optiserve.evaluation import (  # noqa: E402
+from optiserve.config import OptimizationConfig
+from optiserve.evaluation import (
     bapb_optimization_accuracy,
     bcpc_optimization_accuracy,
     bpbc_optimization_accuracy,
     generate_perf_cost_table,
     run_opt_curve,
 )
-from optiserve.modeling.application_model import ApplicationPerformanceModeling  # noqa: E402
-from optiserve.optimization.application_optimizer import ApplicationOptimizer  # noqa: E402
+from optiserve.modeling.application_model import ApplicationPerformanceModeling
+from optiserve.optimization.application_optimizer import ApplicationOptimizer
+from optiserve.optimization.compat import OptimizerCompat
 
 
 def test_evaluation_pipeline_produces_sane_accuracy():
     app = ApplicationPerformanceModeling(_acyclic(), delay_type="None")
     app.cost_calculator.aws_pricing_units = dict(_PRICING)
     with contextlib.redirect_stdout(io.StringIO()):
-        opt = ApplicationOptimizer(app)
+        # The committed CSV/accuracy baselines are published numbers.
+        opt = ApplicationOptimizer(app, config=OptimizationConfig(compat=OptimizerCompat.PUBLISHED))
 
     budget = list(np.linspace(opt.minimal_cost, opt.maximal_cost, 3))
     perf = list(np.linspace(opt.minimal_avg_rt, opt.maximal_avg_rt, 3))
