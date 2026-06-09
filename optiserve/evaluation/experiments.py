@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import itertools
 
-import networkx as nx
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -65,10 +64,9 @@ def generate_perf_cost_table(optimizer, file, start_iterations=1, end_iterations
             current_mem_config = dict(zip(node_list, mem_config))
 
             optimizer.update_App_workflow_mem_rt(optimizer.App, current_mem_config, current_model_config)
-            current_cost = optimizer.App.get_avg_cost()
+            current_cost = optimizer.App.evaluate_avg_cost()
 
-            optimizer.App.get_simple_dag()
-            current_rt = optimizer.App.get_avg_rt()
+            current_rt = optimizer.App.evaluate_avg_rt()
 
             mem_config = {f'f{str(node)}_mem': current_mem_config[node] for node in current_mem_config}
             raw_model_config = {f'f{str(node)}_acc': current_model_config[node] for node in current_model_config}
