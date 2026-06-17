@@ -2,6 +2,7 @@
 
 Curated public API. See ``docs/architecture.md`` for the layered design.
 """
+
 from optiserve.config import (
     AWSConfig,
     ModelingConfig,
@@ -13,13 +14,15 @@ from optiserve.cost import CostCalculator
 from optiserve.modeling.application_model import ApplicationPerformanceModeling
 from optiserve.modeling.function_model import FunctionPerformanceModeling
 from optiserve.modeling.parametric import ParamFunction
+from optiserve.observability import HookRegistry, hooks
 from optiserve.optimization.application_optimizer import ApplicationOptimizer
+from optiserve.optimization.compat import OptimizerCompat
 from optiserve.optimization.result import OptimizationResult
 from optiserve.workflow import FunctionNode, ModelVariant, WorkflowGraph
 
 __version__ = "0.1.0"
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by layer, which is more useful than sorted
     "__version__",
     # workflow
     "WorkflowGraph",
@@ -32,6 +35,10 @@ __all__ = [
     # optimization
     "ApplicationOptimizer",
     "OptimizationResult",
+    "OptimizerCompat",
+    # observability
+    "HookRegistry",
+    "hooks",
     # cost + config
     "CostCalculator",
     "OptiServeConfig",

@@ -1,0 +1,31 @@
+{
+  "name": "two-stage-inference",
+  "description": "A classifier feeding a detector. Latency curves are given inline, so this spec runs with no AWS access and no cached .mdl files.",
+  "delay_type": "SFN",
+  "pricing": { "compute": 0.0000166667, "request": 0.0000002 },
+  "accuracy_formula": { "weighted": [0.5, 0.5] },
+  "functions": [
+    {
+      "id": "classify",
+      "memory_grid": { "start": 512, "stop": 3009, "step": 256 },
+      "variants": [
+        { "name": "resnet-18",  "accuracy": 0.698, "model": { "kind": "exponential", "a0": 516,  "a1": 6500,  "a2": 1510 } },
+        { "name": "resnet-50",  "accuracy": 0.761, "model": { "kind": "exponential", "a0": 1140, "a1": 14900, "a2": 1590 } },
+        { "name": "resnet-101", "accuracy": 0.774, "model": { "kind": "exponential", "a0": 2150, "a1": 25700, "a2": 1490 } }
+      ]
+    },
+    {
+      "id": "detect",
+      "memory_grid": { "start": 512, "stop": 3009, "step": 256 },
+      "variants": [
+        { "name": "yolov10n", "accuracy": 0.385, "model": { "kind": "exponential", "a0": 1160, "a1": 8740,  "a2": 2480 } },
+        { "name": "yolov10s", "accuracy": 0.462, "model": { "kind": "exponential", "a0": 2650, "a1": 21600, "a2": 2350 } }
+      ]
+    }
+  ],
+  "edges": [
+    ["Start", "classify", 1.0],
+    ["classify", "detect", 1.0],
+    ["detect", "End", 1.0]
+  ]
+}
