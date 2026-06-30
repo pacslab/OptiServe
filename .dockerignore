@@ -1,0 +1,38 @@
+# Version control / CI
+.git
+.github
+.gitignore
+
+# Python build + cache artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Large research artifacts — never needed inside the image. The evaluation
+# harness regenerates them, and the compose stack bind-mounts them when a run
+# genuinely needs the cached inputs.
+experiments/
+perf_cost_data/
+opt_curve_data/
+modeled_functions/
+*.npy
+*.pdf
+*.mdl
+*.ipynb
+
+# Local environment
+.env
+.DS_Store
+docs/OptiServe.png

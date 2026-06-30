@@ -1,0 +1,144 @@
+###############################################################################
+# Local evaluation stack for OptiServe.
+#
+#   docker compose run --rm tests            # full offline suite (unit + golden)
+#   docker compose run --rm integration      # moto-backed AWS integration tests
+#   docker compose run --rm lint             # ruff + mypy
+#   docker compose run --rm example          # the offline optimization example
+#   docker compose up mock-aws               # just the fake AWS control plane
+#
+# `mock-aws` is a moto server standing in for the AWS control plane. Every
+# OptiServe boto3 client honours AWS_ENDPOINT_URL, so no code path needs to know
+# it is talking to a mock — the seam is the endpoint, not an injected fake.
+###############################################################################
+
+x-aws-mock-env: &aws-mock-env
+  AWS_ENDPOINT_URL: http://mock-aws:5000
+  AWS_ACCESS_KEY_ID: testing
+  AWS_SECRET_ACCESS_KEY: testing
+  AWS_SESSION_TOKEN: testing
+  AWS_DEFAULT_REGION: us-east-1
+  # Never let a misconfigured local run reach real AWS. AWS_PROFILE is
+  # deliberately NOT set to "": botocore reads an empty value as a profile
+  # named "" and raises ProfileNotFound. Empty credential/config files are
+  # enough to guarantee nothing is picked up from the host.
+  AWS_SHARED_CREDENTIALS_FILE: /dev/null
+  AWS_CONFIG_FILE: /dev/null
+  AWS_EC2_METADATA_DISABLED: "true"
+
+x-dev-image: &dev-image
+  build:
+    context: .
+    target: dev
+    args:
+      PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+  image: optiserve:dev
+  working_dir: /app
+  init: true
+
+services:
+  # --------------------------------------------------------------------- #
+  # Fake AWS control plane (Lambda config, CloudWatch Logs, IAM, STS).
+  # --------------------------------------------------------------------- #
+  mock-aws:
+    image: motoserver/moto:5.0.28
+    container_name: optiserve-mock-aws
+    ports:
+      - "${MOTO_PORT:-5000}:5000"
+    environment:
+      MOTO_PORT: "5000"
+      MOTO_DOCKER_LAMBDA_INVOKE: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/moto-api/').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # --------------------------------------------------------------------- #
+  # Offline suite: unit + golden-master regressions. No network at all.
+  # --------------------------------------------------------------------- #
+  tests:
+    <<: *dev-image
+    container_name: optiserve-tests
+    environment:
+      <<: *aws-mock-env
+      AWS_ENDPOINT_URL: ""
+    command:
+      - pytest
+      - -q
+      - -m
+      - "not integration"
+      - --cov=optiserve
+      - --cov-report=term-missing
+      - --cov-report=xml:/app/output/coverage.xml
+    volumes:
+      - ./output:/app/output
+      - ./modeled_functions:/app/modeled_functions:ro
+
+  # --------------------------------------------------------------------- #
+  # Integration suite against the moto SERVER, over HTTP.
+  #
+  # The same tests also run in-process (that is what `pytest -m integration`
+  # does with no AWS_ENDPOINT_URL). This leg is the one that exercises the seam
+  # OptiServe actually ships: every client is built through create_client,
+  # which honours AWS_ENDPOINT_URL, so no library code knows AWS is a mock.
+  # --------------------------------------------------------------------- #
+  integration:
+    <<: *dev-image
+    container_name: optiserve-integration
+    depends_on:
+      mock-aws:
+        condition: service_healthy
+    environment:
+      <<: *aws-mock-env
+      OPTISERVE_INTEGRATION: "1"
+    command: ["pytest", "-q", "-m", "integration", "-p", "no:cacheprovider"]
+    volumes:
+      - ./output:/app/output
+
+  # --------------------------------------------------------------------- #
+  # Static analysis.
+  # --------------------------------------------------------------------- #
+  lint:
+    <<: *dev-image
+    container_name: optiserve-lint
+    command:
+      - sh
+      - -c
+      - "ruff check optiserve tests && ruff format --check optiserve tests && mypy optiserve"
+
+  # --------------------------------------------------------------------- #
+  # The offline worked example — proof the library runs with zero AWS access.
+  # --------------------------------------------------------------------- #
+  example:
+    <<: *dev-image
+    container_name: optiserve-example
+    environment:
+      AWS_ENDPOINT_URL: ""
+    command: ["python", "examples/optimize_workflow.py"]
+
+  # --------------------------------------------------------------------- #
+  # The production image, for smoke-testing exactly what would be shipped.
+  # --------------------------------------------------------------------- #
+  optiserve:
+    build:
+      context: .
+      target: runtime
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+    image: optiserve:latest
+    container_name: optiserve
+    init: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      - ./modeled_functions:/app/modeled_functions:ro
+      - ./output:/app/output
+    command: ["--help"]
